@@ -3,6 +3,8 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
+import { SetupScreen } from '@/components/shared/SetupBanner'
+import { isSupabaseConfigured } from '@/lib/supabase'
 import { AppLayout } from '@/layouts/AppLayout'
 import { AuthLayout } from '@/layouts/AuthLayout'
 import { LoginPage } from '@/pages/auth/LoginPage'
@@ -31,6 +33,10 @@ const queryClient = new QueryClient({
 })
 
 export default function App() {
+  if (!isSupabaseConfigured) {
+    return <SetupScreen />
+  }
+
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
