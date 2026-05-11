@@ -1,0 +1,535 @@
+{
+  "id": "SUBSTITUIR-POR-UUID-V4-AQUI",
+  "meta": {
+    "instanceId": "SUBSTITUIR-PELO-INSTANCE-ID-DA-SUA-INSTANCIA-N8N"
+  },
+  "name": "Pipeline Multiagente – Campanha Multicanal",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "briefing-campanha",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "node-webhook-trigger",
+      "name": "Entrada Webhook Formulario",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 300],
+      "webhookId": "briefing-campanha-001",
+      "notes": "Conecte aqui o Typeform, Tally ou Google Forms via webhook POST. O body deve conter os campos do briefing do cliente em JSON."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normaliza o body recebido do formulário\nconst body = $input.first().json;\n\n// Suporte a Typeform, Tally e Google Forms\nlet dados = {};\n\n// Typeform\nif (body.form_response && body.form_response.answers) {\n  const answers = body.form_response.answers;\n  const fields = body.form_response.definition.fields;\n  fields.forEach((field, i) => {\n    const ans = answers[i];\n    dados[field.title] = ans?.text || ans?.choice?.label || ans?.number || '';\n  });\n}\n// Tally\nelse if (body.data && body.data.fields) {\n  body.data.fields.forEach(f => {\n    dados[f.label] = f.value;\n  });\n}\n// Google Forms (via Apps Script webhook)\nelse if (body.responses) {\n  body.responses.forEach(r => {\n    dados[r.question] = r.answer;\n  });\n}\n// Fallback: usa o body diretamente\nelse {\n  dados = body;\n}\n\nreturn [{ json: { dados_brutos: JSON.stringify(dados, null, 2), raw: dados } }];"
+      },
+      "id": "node-normalizer",
+      "name": "Normalizar Dados do Formulario",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ JSON.stringify({ model: 'gpt-4o', max_tokens: 2000, temperature: 0.3, messages: [ { role: 'system', content: 'Você é um Analista de Briefing especializado em transformar respostas de formulários em insumos estratégicos para copywriting. Sua função NÃO é criar copy ainda. Sua função é: Limpar, Organizar, Interpretar, Enriquecer estrategicamente. Retorne SOMENTE um JSON válido com as chaves: contexto, publico_alvo, oferta, tom_de_voz, leitura_estrategica, info_faltantes.' }, { role: 'user', content: 'DADOS RECEBIDOS:\\n' + $json.dados_brutos + '\\n\\nETAPA 1 — NORMALIZAÇÃO: Reescreva e organize as informações de forma clara, corrigindo erros de digitação, respostas confusas, redundâncias. Se algum campo estiver vazio ou vago, sinalize.\\n\\nETAPA 2 — ESTRUTURAÇÃO ESTRATÉGICA: Organize no formato solicitado nas chaves do JSON.\\n\\nETAPA 3 — INTERPRETAÇÃO: Adicione leitura_estrategica com: o que o cliente quer dizer mas não disse claramente, oportunidades de posicionamento, possíveis ângulos de copy.\\n\\nETAPA 4 — VALIDAÇÃO: Se faltar informação crítica, liste em info_faltantes.\\n\\nRetorne APENAS o JSON, sem markdown, sem explicação.' } ] }) }}",
+        "options": {}
+      },
+      "id": "node-agente1-leitor",
+      "name": "Agente 1 Leitor de Briefing GPT4o",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "SUBSTITUIR-PELO-ID-REAL-DA-CREDENCIAL-OPENAI",
+          "name": "OpenAI API Key"
+        }
+      },
+      "notes": "CREDENCIAL: Crie uma credencial do tipo 'Header Auth' com Name='Authorization' e Value='Bearer SUA_CHAVE_OPENAI'. Substitua o id acima pelo ID gerado."
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst content = response.choices[0].message.content;\n\nlet briefing;\ntry {\n  briefing = JSON.parse(content);\n} catch(e) {\n  // Tenta extrair JSON de dentro de markdown\n  const match = content.match(/```json([\\s\\S]*?)```/);\n  if (match) {\n    briefing = JSON.parse(match[1].trim());\n  } else {\n    briefing = { erro: 'Falha ao parsear briefing', raw: content };\n  }\n}\n\nreturn [{ json: { briefing } }];"
+      },
+      "id": "node-parse-briefing",
+      "name": "Parsear Briefing Agente 1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ JSON.stringify({ model: 'gpt-4o', max_tokens: 3000, temperature: 0.7, messages: [ { role: 'system', content: 'Você é um Copywriter Estratégico especializado em campanhas multicanal. Receberá uma análise estruturada de briefing. Sua função é transformar isso em copy altamente persuasivo, adaptado para diferentes canais. Cada canal tem linguagem, ritmo e objetivo diferentes. NÃO reutilize o mesmo texto adaptando superficialmente. Retorne SOMENTE um JSON válido com as chaves: resumo_estrategico, instagram (com: legenda_principal, hook_1, hook_2), email (com: assunto_1, assunto_2, assunto_3, corpo, cta), whatsapp (com: mensagem_principal, versao_curta, versao_informal).' }, { role: 'user', content: 'BRIEFING ESTRUTURADO:\\n' + JSON.stringify($json.briefing, null, 2) + '\\n\\nETAPA 1 — EXTRAÇÃO ESTRATÉGICA: Defina internamente: Big Idea da campanha, Promessa central, Emoção principal, Principal dor, Principal desejo.\\n\\nETAPA 2 — PRODUÇÃO POR CANAL:\\n\\nINSTAGRAM: Hook forte, texto escaneável, linguagem envolvente, CTA. Entregue: 1 legenda principal + 2 variações de hook.\\n\\nE-MAIL: Assunto chamativo, abertura com identificação, argumento persuasivo, CTA claro. Entregue: 3 opções de assunto + corpo completo + CTA.\\n\\nWHATSAPP: Conversacional, direto, sensação de 1:1. Entregue: mensagem principal + versão curta + versão informal.\\n\\nRETORNE APENAS o JSON, sem markdown.' } ] }) }}",
+        "options": {}
+      },
+      "id": "node-agente2-copy",
+      "name": "Agente 2 Copywriter Multicanal GPT4o",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "SUBSTITUIR-PELO-ID-REAL-DA-CREDENCIAL-OPENAI",
+          "name": "OpenAI API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst content = response.choices[0].message.content;\n\nlet copy;\ntry {\n  copy = JSON.parse(content);\n} catch(e) {\n  const match = content.match(/```json([\\s\\S]*?)```/);\n  if (match) {\n    copy = JSON.parse(match[1].trim());\n  } else {\n    copy = { erro: 'Falha ao parsear copy', raw: content };\n  }\n}\n\n// Recupera o briefing do Agente 1\nconst briefing = $('Parsear Briefing Agente 1').first().json.briefing;\n\nreturn [{ json: { briefing, copy } }];"
+      },
+      "id": "node-parse-copy",
+      "name": "Parsear Copy Agente 2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ JSON.stringify({ contents: [{ parts: [{ text: 'Você é um Diretor de Arte especializado em geração de imagens para campanhas de marketing. Transforme os copies recebidos em prompts visuais estratégicos e consistentes com a identidade da marca. Você cria imagens que convertem, não apenas imagens bonitas. Retorne SOMENTE um JSON válido com as chaves: direcao_criativa, prompts (com: instagram_1, instagram_2, whatsapp, email).\\n\\nCOPY DA CAMPANHA:\\n' + JSON.stringify($json.copy, null, 2) + '\\n\\nDIRETRIZES ESTRATÉGICAS:\\n' + ($json.copy.resumo_estrategico || '') + '\\n\\nETAPA 1 — LEITURA ESTRATÉGICA: Qual emoção a imagem precisa transmitir? Qual mensagem em 3 segundos? Emocional, aspiracional, informativa ou provocativa?\\n\\nETAPA 2 — DIREÇÃO DE ARTE: Defina conceito visual, estilo (fotográfico/ilustração/3D/editorial/lifestyle), composição, elementos, cenário, enquadramento, identidade visual.\\n\\nETAPA 3 — PROMPTS: Crie prompts extremamente descritivos para geração de imagem. Inclua: estilo, iluminação, lente, textura, mood, qualidade, instruções técnicas. Garanta consistência visual entre variações.\\n\\nINSTAGRAM: 2 prompts (variações). WHATSAPP: 1 prompt direto. EMAIL: 1 prompt banner/hero.\\n\\nRETORNE APENAS o JSON, sem markdown.' }] }] }) }}",
+        "options": {}
+      },
+      "id": "node-agente3-designer",
+      "name": "Agente 3 Designer Visual Gemini Flash",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "SUBSTITUIR-PELO-ID-REAL-DA-CREDENCIAL-GEMINI",
+          "name": "Gemini API Key"
+        }
+      },
+      "notes": "CREDENCIAL: Crie uma credencial do tipo 'Header Auth' com Name='x-goog-api-key' e Value='SUA_CHAVE_GEMINI'. Substitua o id acima pelo ID gerado."
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\n\nlet content = '';\ntry {\n  content = response.candidates[0].content.parts[0].text;\n} catch(e) {\n  content = JSON.stringify(response);\n}\n\nlet imagens;\ntry {\n  imagens = JSON.parse(content);\n} catch(e) {\n  const match = content.match(/```json([\\s\\S]*?)```/);\n  if (match) {\n    imagens = JSON.parse(match[1].trim());\n  } else {\n    imagens = { erro: 'Falha ao parsear imagens', raw: content };\n  }\n}\n\nconst briefing = $('Parsear Briefing Agente 1').first().json.briefing;\nconst copy = $('Parsear Copy Agente 2').first().json.copy;\n\nreturn [{ json: { briefing, copy, imagens } }];"
+      },
+      "id": "node-parse-imagens",
+      "name": "Parsear Imagens Agente 3",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ JSON.stringify({ model: 'gpt-4o', max_tokens: 2000, temperature: 0.2, messages: [ { role: 'system', content: 'Você é um Diretor de Marketing Sênior responsável por validar campanhas antes da publicação. Analise criticamente se os materiais criados (copy + imagens) estão alinhados com o briefing original. Você pode APROVAR, APROVAR COM AJUSTES ou REPROVAR. Seja rigoroso. Retorne SOMENTE um JSON válido com as chaves: scores (com: instagram número 0-100, email número 0-100, whatsapp número 0-100), pontos_fortes (array), pontos_fracos (array), riscos (array), veredito (string: APROVADO | APROVADO_COM_AJUSTES | REPROVADO), ajustes_recomendados (string), reescrita (objeto com partes reescritas se necessário), aprovado (boolean: true somente se TODOS os scores >= 80).' }, { role: 'user', content: 'BRIEFING ESTRUTURADO (AGENTE 1):\\n' + JSON.stringify($json.briefing, null, 2) + '\\n\\nCOPY GERADO (AGENTE 2):\\n' + JSON.stringify($json.copy, null, 2) + '\\n\\nDIREÇÃO VISUAL E PROMPTS (AGENTE 3):\\n' + JSON.stringify($json.imagens, null, 2) + '\\n\\nCRITÉRIOS DE AVALIAÇÃO:\\n1. ALINHAMENTO ESTRATÉGICO: O copy respeita o objetivo? A promessa é coerente com a oferta? Está alinhado ao público?\\n2. FORÇA DA COPY: O hook chama atenção? Gatilhos bem aplicados? Específico ou genérico? Persuasivo ou morno?\\n3. ADAPTAÇÃO POR CANAL: Instagram escaneável? E-mail bem estruturado? WhatsApp natural?\\n4. CONSISTÊNCIA VISUAL: Coerência entre criativos? A direção visual reforça a mensagem?\\n5. COERÊNCIA GERAL: Copy e imagem contam a mesma história?\\n\\nRETORNE APENAS o JSON, sem markdown.' } ] }) }}",
+        "options": {}
+      },
+      "id": "node-agente4-validador",
+      "name": "Agente 4 Validador GPT4o",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1760, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "SUBSTITUIR-PELO-ID-REAL-DA-CREDENCIAL-OPENAI",
+          "name": "OpenAI API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst content = response.choices[0].message.content;\n\nlet validacao;\ntry {\n  validacao = JSON.parse(content);\n} catch(e) {\n  const match = content.match(/```json([\\s\\S]*?)```/);\n  if (match) {\n    validacao = JSON.parse(match[1].trim());\n  } else {\n    validacao = { erro: 'Falha ao parsear validação', raw: content, aprovado: false };\n  }\n}\n\nconst briefing = $('Parsear Briefing Agente 1').first().json.briefing;\nconst copy = $('Parsear Copy Agente 2').first().json.copy;\nconst imagens = $('Parsear Imagens Agente 3').first().json.imagens;\n\nreturn [{ json: { briefing, copy, imagens, validacao, aprovado: validacao.aprovado === true } }];"
+      },
+      "id": "node-parse-validacao",
+      "name": "Parsear Validacao Agente 4",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1980, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+              "leftValue": "={{ $json.aprovado }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-if-aprovado",
+      "name": "Bifurcacao Aprovado",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2200, 300]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "SUBSTITUIR-PELO-ID-REAL-DA-PLANILHA-GOOGLE-SHEETS",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Campanhas Aprovadas",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Data": "={{ new Date().toLocaleString('pt-BR') }}",
+            "Status": "APROVADO",
+            "Score_Instagram": "={{ $json.validacao.scores?.instagram }}",
+            "Score_Email": "={{ $json.validacao.scores?.email }}",
+            "Score_WhatsApp": "={{ $json.validacao.scores?.whatsapp }}",
+            "Produto": "={{ $json.briefing?.contexto?.produto_servico || $json.briefing?.contexto }}",
+            "Resumo_Estrategico": "={{ $json.copy?.resumo_estrategico }}",
+            "Instagram_Legenda": "={{ $json.copy?.instagram?.legenda_principal }}",
+            "Instagram_Hook1": "={{ $json.copy?.instagram?.hook_1 }}",
+            "Instagram_Hook2": "={{ $json.copy?.instagram?.hook_2 }}",
+            "Email_Assunto1": "={{ $json.copy?.email?.assunto_1 }}",
+            "Email_Assunto2": "={{ $json.copy?.email?.assunto_2 }}",
+            "Email_Assunto3": "={{ $json.copy?.email?.assunto_3 }}",
+            "Email_Corpo": "={{ $json.copy?.email?.corpo }}",
+            "Email_CTA": "={{ $json.copy?.email?.cta }}",
+            "WhatsApp_Principal": "={{ $json.copy?.whatsapp?.mensagem_principal }}",
+            "WhatsApp_Curto": "={{ $json.copy?.whatsapp?.versao_curta }}",
+            "WhatsApp_Informal": "={{ $json.copy?.whatsapp?.versao_informal }}",
+            "Prompt_Instagram_1": "={{ $json.imagens?.prompts?.instagram_1 }}",
+            "Prompt_Instagram_2": "={{ $json.imagens?.prompts?.instagram_2 }}",
+            "Prompt_WhatsApp": "={{ $json.imagens?.prompts?.whatsapp }}",
+            "Prompt_Email": "={{ $json.imagens?.prompts?.email }}",
+            "Direcao_Criativa": "={{ $json.imagens?.direcao_criativa }}",
+            "Pontos_Fortes": "={{ $json.validacao?.pontos_fortes?.join(' | ') }}",
+            "Briefing_Completo": "={{ JSON.stringify($json.briefing) }}"
+          },
+          "matchingColumns": ["Data"],
+          "schema": [
+            {"id": "Data", "displayName": "Data", "required": false, "defaultMatch": true, "display": true, "type": "string", "canBeUsedToMatch": true},
+            {"id": "Status", "displayName": "Status", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false},
+            {"id": "Score_Instagram", "displayName": "Score_Instagram", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false},
+            {"id": "Score_Email", "displayName": "Score_Email", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false},
+            {"id": "Score_WhatsApp", "displayName": "Score_WhatsApp", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false},
+            {"id": "Produto", "displayName": "Produto", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false},
+            {"id": "Resumo_Estrategico", "displayName": "Resumo_Estrategico", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false},
+            {"id": "Instagram_Legenda", "displayName": "Instagram_Legenda", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false},
+            {"id": "Instagram_Hook1", "displayName": "Instagram_Hook1", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false},
+            {"id": "Instagram_Hook2", "displayName": "Instagram_Hook2", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false},
+            {"id": "Email_Assunto1", "displayName": "Email_Assunto1", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false},
+            {"id": "Email_Assunto2", "displayName": "Email_Assunto2", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false},
+            {"id": "Email_Assunto3", "displayName": "Email_Assunto3", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false},
+            {"id": "Email_Corpo", "displayName": "Email_Corpo", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false},
+            {"id": "Email_CTA", "displayName": "Email_CTA", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false},
+            {"id": "WhatsApp_Principal", "displayName": "WhatsApp_Principal", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false},
+            {"id": "WhatsApp_Curto", "displayName": "WhatsApp_Curto", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false},
+            {"id": "WhatsApp_Informal", "displayName": "WhatsApp_Informal", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false},
+            {"id": "Prompt_Instagram_1", "displayName": "Prompt_Instagram_1", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false},
+            {"id": "Prompt_Instagram_2", "displayName": "Prompt_Instagram_2", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false},
+            {"id": "Prompt_WhatsApp", "displayName": "Prompt_WhatsApp", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false},
+            {"id": "Prompt_Email", "displayName": "Prompt_Email", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false},
+            {"id": "Direcao_Criativa", "displayName": "Direcao_Criativa", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false},
+            {"id": "Pontos_Fortes", "displayName": "Pontos_Fortes", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false},
+            {"id": "Briefing_Completo", "displayName": "Briefing_Completo", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false}
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-sheets-aprovado",
+      "name": "Google Sheets Salvar Aprovado",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [2420, 180],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "SUBSTITUIR-PELO-ID-REAL-DA-CREDENCIAL-GOOGLE-SHEETS",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "notes": "CONFIGURAR: Substitua o ID da planilha acima. Crie uma aba chamada 'Campanhas Aprovadas' com as colunas: Data, Status, Score_Instagram, Score_Email, Score_WhatsApp, Produto, Resumo_Estrategico, Instagram_Legenda, Instagram_Hook1, Instagram_Hook2, Email_Assunto1, Email_Assunto2, Email_Assunto3, Email_Corpo, Email_CTA, WhatsApp_Principal, WhatsApp_Curto, WhatsApp_Informal, Prompt_Instagram_1, Prompt_Instagram_2, Prompt_WhatsApp, Prompt_Email, Direcao_Criativa, Pontos_Fortes, Briefing_Completo"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "SUBSTITUIR-PELO-ID-REAL-DA-PLANILHA-GOOGLE-SHEETS",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Ajustes Necessarios",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Data": "={{ new Date().toLocaleString('pt-BR') }}",
+            "Status": "={{ $json.validacao?.veredito }}",
+            "Score_Instagram": "={{ $json.validacao.scores?.instagram }}",
+            "Score_Email": "={{ $json.validacao.scores?.email }}",
+            "Score_WhatsApp": "={{ $json.validacao.scores?.whatsapp }}",
+            "Produto": "={{ $json.briefing?.contexto?.produto_servico || $json.briefing?.contexto }}",
+            "Pontos_Fracos": "={{ $json.validacao?.pontos_fracos?.join(' | ') }}",
+            "Riscos": "={{ $json.validacao?.riscos?.join(' | ') }}",
+            "Ajustes_Recomendados": "={{ $json.validacao?.ajustes_recomendados }}",
+            "Reescrita": "={{ JSON.stringify($json.validacao?.reescrita) }}",
+            "Copy_Gerado": "={{ JSON.stringify($json.copy) }}",
+            "Imagens_Geradas": "={{ JSON.stringify($json.imagens) }}",
+            "Briefing_Completo": "={{ JSON.stringify($json.briefing) }}"
+          },
+          "matchingColumns": ["Data"],
+          "schema": [
+            {"id": "Data", "displayName": "Data", "required": false, "defaultMatch": true, "display": true, "type": "string", "canBeUsedToMatch": true},
+            {"id": "Status", "displayName": "Status", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false},
+            {"id": "Score_Instagram", "displayName": "Score_Instagram", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false},
+            {"id": "Score_Email", "displayName": "Score_Email", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false},
+            {"id": "Score_WhatsApp", "displayName": "Score_WhatsApp", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false},
+            {"id": "Produto", "displayName": "Produto", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false},
+            {"id": "Pontos_Fracos", "displayName": "Pontos_Fracos", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false},
+            {"id": "Riscos", "displayName": "Riscos", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false},
+            {"id": "Ajustes_Recomendados", "displayName": "Ajustes_Recomendados", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false},
+            {"id": "Reescrita", "displayName": "Reescrita", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false},
+            {"id": "Copy_Gerado", "displayName": "Copy_Gerado", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false},
+            {"id": "Imagens_Geradas", "displayName": "Imagens_Geradas", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false},
+            {"id": "Briefing_Completo", "displayName": "Briefing_Completo", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false}
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-sheets-ajuste",
+      "name": "Google Sheets Salvar Ajuste",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [2420, 420],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "SUBSTITUIR-PELO-ID-REAL-DA-CREDENCIAL-GOOGLE-SHEETS",
+          "name": "Google Sheets OAuth2"
+        }
+      },
+      "notes": "CONFIGURAR: Crie uma aba chamada 'Ajustes Necessarios' (sem acento — evita problemas de encoding) na mesma planilha, com as colunas: Data, Status, Score_Instagram, Score_Email, Score_WhatsApp, Produto, Pontos_Fracos, Riscos, Ajustes_Recomendados, Reescrita, Copy_Gerado, Imagens_Geradas, Briefing_Completo"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: 'APROVADO', mensagem: 'Campanha gerada e aprovada com sucesso!', scores: $json.validacao?.scores, resumo: $json.copy?.resumo_estrategico } }}"
+      },
+      "id": "node-response-ok",
+      "name": "Resposta Aprovado",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2640, 180]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: $json.validacao?.veredito, mensagem: 'Campanha gerada com pendencias. Verifique a planilha de ajustes.', scores: $json.validacao?.scores, ajustes: $json.validacao?.ajustes_recomendados } }}"
+      },
+      "id": "node-response-ajuste",
+      "name": "Resposta Ajuste Necessario",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2640, 420]
+    }
+  ],
+  "connections": {
+    "Entrada Webhook Formulario": {
+      "main": [
+        [
+          {
+            "node": "Normalizar Dados do Formulario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar Dados do Formulario": {
+      "main": [
+        [
+          {
+            "node": "Agente 1 Leitor de Briefing GPT4o",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agente 1 Leitor de Briefing GPT4o": {
+      "main": [
+        [
+          {
+            "node": "Parsear Briefing Agente 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parsear Briefing Agente 1": {
+      "main": [
+        [
+          {
+            "node": "Agente 2 Copywriter Multicanal GPT4o",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agente 2 Copywriter Multicanal GPT4o": {
+      "main": [
+        [
+          {
+            "node": "Parsear Copy Agente 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parsear Copy Agente 2": {
+      "main": [
+        [
+          {
+            "node": "Agente 3 Designer Visual Gemini Flash",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agente 3 Designer Visual Gemini Flash": {
+      "main": [
+        [
+          {
+            "node": "Parsear Imagens Agente 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parsear Imagens Agente 3": {
+      "main": [
+        [
+          {
+            "node": "Agente 4 Validador GPT4o",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agente 4 Validador GPT4o": {
+      "main": [
+        [
+          {
+            "node": "Parsear Validacao Agente 4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parsear Validacao Agente 4": {
+      "main": [
+        [
+          {
+            "node": "Bifurcacao Aprovado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bifurcacao Aprovado": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets Salvar Aprovado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Google Sheets Salvar Ajuste",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets Salvar Aprovado": {
+      "main": [
+        [
+          {
+            "node": "Resposta Aprovado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets Salvar Ajuste": {
+      "main": [
+        [
+          {
+            "node": "Resposta Ajuste Necessario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": [
+    {"id": "1", "name": "multiagente"},
+    {"id": "2", "name": "campanha"},
+    {"id": "3", "name": "marketing"},
+    {"id": "4", "name": "ia"}
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2026-05-11T00:00:00.000Z",
+  "versionId": "1"
+}
