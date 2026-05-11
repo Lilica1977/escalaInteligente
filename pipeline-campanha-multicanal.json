@@ -343,6 +343,82 @@
     },
     {
       "parameters": {
+        "options": {}
+      },
+      "id": "node-chat-trigger",
+      "name": "Chat Trigger Campanha",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 700],
+      "webhookId": "chat-campanha-001",
+      "notes": "Abre a interface de chat nativa do n8n. Use o botão 'Open chat' para testar interativamente. Este trigger alimenta o AI Agent nativo com memória e ferramentas de pesquisa."
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "Você é um especialista em marketing digital e criação de campanhas multicanal. Você ajuda clientes a desenvolver estratégias de marketing, criar copy persuasivo para Instagram, e-mail e WhatsApp, e orientar sobre direção de arte para campanhas. Quando precisar de informações atualizadas sobre mercado, concorrentes ou tendências, use a ferramenta de pesquisa disponível. Mantenha o contexto da conversa e seja consultivo, fazendo perguntas para entender melhor o negócio do cliente antes de sugerir estratégias. Responda sempre em português brasileiro."
+        }
+      },
+      "id": "node-ai-agent",
+      "name": "AI Agent Campanha",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [280, 700],
+      "notes": "Agente nativo LangChain do n8n. Recebe mensagens do chat, usa o OpenAI Chat Model como LLM, Simple Memory para contexto de conversa e SerpAPI para pesquisas em tempo real."
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 2000
+        }
+      },
+      "id": "node-openai-chat-model",
+      "name": "OpenAI Chat Model Agente",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [100, 900],
+      "credentials": {
+        "openAiApi": {
+          "id": "SUBSTITUIR-PELO-ID-REAL-DA-CREDENCIAL-OPENAI-NATIVA",
+          "name": "OpenAI API"
+        }
+      },
+      "notes": "CREDENCIAL: Crie uma credencial do tipo 'OpenAI API' (não Header Auth) com sua chave OpenAI. Este tipo é específico para os nós LangChain nativos do n8n."
+    },
+    {
+      "parameters": {
+        "sessionIdType": "fromInput",
+        "sessionKey": "sessionId",
+        "contextWindowLength": 10
+      },
+      "id": "node-simple-memory",
+      "name": "Simple Memory Agente",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [400, 900],
+      "notes": "Mantém as últimas 10 mensagens da conversa em memória. Permite que o agente lembre do contexto sem banco de dados externo. O sessionId é extraído automaticamente do input do chat."
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "node-serpapi-tool",
+      "name": "SerpAPI Tool Agente",
+      "type": "@n8n/n8n-nodes-langchain.toolSerpApi",
+      "typeVersion": 1,
+      "position": [680, 900],
+      "credentials": {
+        "serpApi": {
+          "id": "SUBSTITUIR-PELO-ID-REAL-DA-CREDENCIAL-SERPAPI",
+          "name": "SerpAPI"
+        }
+      },
+      "notes": "CREDENCIAL: Crie uma credencial do tipo 'SerpAPI' com sua chave em serpapi.com. Permite ao agente pesquisar informações atualizadas sobre concorrentes, tendências e mercado em tempo real durante o chat."
+    },
+    {
+      "parameters": {
         "respondWith": "json",
         "responseBody": "={{ { status: 'APROVADO', mensagem: 'Campanha gerada e aprovada com sucesso!', scores: $json.validacao?.scores, resumo: $json.copy?.resumo_estrategico } }}"
       },
@@ -510,6 +586,50 @@
           {
             "node": "Resposta Ajuste Necessario",
             "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat Trigger Campanha": {
+      "main": [
+        [
+          {
+            "node": "AI Agent Campanha",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model Agente": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent Campanha",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory Agente": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent Campanha",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SerpAPI Tool Agente": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent Campanha",
+            "type": "ai_tool",
             "index": 0
           }
         ]
