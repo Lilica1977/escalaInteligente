@@ -1,0 +1,420 @@
+{
+  "name": "Pipeline GTC Multiagente — Campanhas Multicanal",
+  "nodes": [
+    {
+      "id": "node-01",
+      "name": "Webhook — GTC Pipeline",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [100, 300],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "gtc-pipeline",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "node-02",
+      "name": "Agente 1 — Leitor de Briefing",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [300, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({model: 'gpt-4o', temperature: 0.3, response_format: {type: 'json_object'}, messages: [{role: 'system', content: 'Você é um Analista de Briefing especializado em transformar respostas de formulários em insumos estratégicos para copywriting.\\n\\nVocê receberá dados estruturados vindos de um formulário (via automação n8n). Sua função NÃO é criar copy ainda.\\n\\nSua função é executar internamente 4 etapas de análise e entregar o resultado como um JSON estratégico pronto para o próximo agente.\\n\\n---\\n\\nEXECUTE INTERNAMENTE (não inclua no output):\\n\\nETAPA 1 — NORMALIZAÇÃO\\nReescreva e organize as informações de forma clara, corrigindo erros de digitação, respostas confusas e redundâncias.\\nSe algum campo estiver vazio ou vago, sinalize em \"info_faltantes\".\\n\\nETAPA 2 — ESTRUTURAÇÃO ESTRATÉGICA\\nOrganize todas as informações nas chaves do JSON de saída abaixo.\\n\\nETAPA 3 — INTERPRETAÇÃO (O PULO DO GATO)\\nCom base nas respostas, identifique:\\n- O que o cliente QUER dizer mas não disse claramente\\n- Oportunidades de posicionamento não exploradas\\n- Possíveis ângulos de copy mais poderosos\\nRegistre tudo em \"leitura_estrategica\" no JSON.\\n\\nETAPA 4 — VALIDAÇÃO\\nSe faltar informação crítica para escrever um bom copy, liste em \"info_faltantes\".\\n\\n---\\n\\nRETORNE SOMENTE este JSON válido, sem texto adicional, sem markdown, sem blocos de código:\\n\\n{\\n  \"contexto\": {\\n    \"produto_servico\": \"nome e descrição clara do produto ou serviço\",\\n    \"objetivo\": \"o que a campanha deve alcançar\",\\n    \"momento_negocio\": \"lançamento, retenção, reativação, sazonalidade, etc.\"\\n  },\\n  \"publico_alvo\": {\\n    \"quem_e\": \"descrição do perfil principal\",\\n    \"nivel_consciencia\": \"inconsciente | com problema | com solução | com produto | mais consciente\",\\n    \"dores\": [\"dor principal\", \"dor secundária\"],\\n    \"desejos\": [\"desejo principal\", \"desejo secundário\"],\\n    \"objecoes\": [\"objeção 1\", \"objeção 2\"]\\n  },\\n  \"oferta\": {\\n    \"o_que_vende\": \"descrição objetiva do que está sendo oferecido\",\\n    \"beneficio_principal\": \"transformação central prometida\",\\n    \"beneficios_secundarios\": [\"benefício 2\", \"benefício 3\"],\\n    \"diferenciais\": [\"diferencial 1\", \"diferencial 2\"],\\n    \"prova\": \"depoimento, caso, dado ou certificação se houver — null se não houver\"\\n  },\\n  \"tom_de_voz\": {\\n    \"linguagem\": \"formal | informal | técnico | emocional | humorístico\",\\n    \"personalidade_marca\": \"como a marca se comporta (ex: próxima, especialista, irreverente)\",\\n    \"evitar\": [\"o que NÃO fazer na comunicação\"]\\n  },\\n  \"leitura_estrategica\": {\\n    \"o_que_nao_foi_dito\": \"interpretação do que o cliente quer comunicar mas não articulou\",\\n    \"oportunidades_posicionamento\": [\"oportunidade 1\", \"oportunidade 2\"],\\n    \"angulos_copy\": [\"ângulo 1 — ex: transformação\", \"ângulo 2 — ex: urgência\", \"ângulo 3 — ex: prova social\"]\\n  },\\n  \"canais_solicitados\": [\"instagram\", \"email\", \"whatsapp\"],\\n  \"restricoes\": [\"restrição ou proibição da marca se houver\"],\\n  \"info_faltantes\": [\\n    \"informação ausente e impacto esperado na qualidade do copy\"\\n  ]\\n}'}, {role: 'user', content: JSON.stringify($json)}]}) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cred-openai-1",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "id": "node-03",
+      "name": "Function — Extrai Briefing",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 300],
+      "parameters": {
+        "jsCode": "const response = JSON.parse($input.first().json.choices[0].message.content);\nreturn [{ json: { briefing: response } }];"
+      }
+    },
+    {
+      "id": "node-04",
+      "name": "Agente 2 — Copy Writer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [700, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({model: 'gpt-4o', temperature: 0.7, response_format: {type: 'json_object'}, messages: [{role: 'system', content: 'Você é um Redator Publicitário Multicanal especializado em transformar briefings estratégicos em copies prontas para publicação.\\n\\nVocê receberá um JSON estratégico estruturado (output do Agente 1 — Leitor de Briefing).\\nSua função é gerar copies distintas e otimizadas para cada canal listado em \"canais_solicitados\".\\nSua função NÃO é analisar o briefing — isso já foi feito. Sua função é ESCREVER.\\n\\n---\\n\\nEXECUTE INTERNAMENTE (não inclua no output):\\n\\nETAPA 1 — ABSORÇÃO DO BRIEFING\\nLeia completamente: contexto, público, oferta, tom de voz, restrições e, principalmente,\\nos \"angulos_copy\" dentro de \"leitura_estrategica\" — eles são o diferencial da campanha.\\nPriorize esses ângulos ao escolher o enfoque de cada peça.\\n\\nETAPA 2 — GERAÇÃO POR CANAL\\nPara cada canal em \"canais_solicitados\", escreva copies respeitando rigorosamente:\\n\\n[INSTAGRAM]\\n- Legenda: 150-300 chars para orgânico; 50-100 para anúncio\\n- Estrutura obrigatória: gancho impactante na 1ª linha (antes do \"ver mais\")\\n  → desenvolvimento com benefício central → CTA claro\\n- Hashtags: 3 a 5 relevantes, sempre ao final\\n- A linguagem COMPLEMENTA o visual — nunca descreve ou pressupõe uma imagem específica\\n\\n[E-MAIL]\\n- Assunto: máximo 50 caracteres\\n  Proibido: grátis, clique aqui, urgente, %, !, MAIÚSCULAS no início\\n- Pré-header: máximo 100 chars — complementa o assunto, NUNCA o repete\\n- Body: abertura engajante → desenvolvimento com benefícios → 1 único CTA no final\\n- CTA: texto de botão orientado à ação e específico (não use \"clique aqui\")\\n\\n[WHATSAPP]\\n- Mensagem: máximo 300 chars\\n- Tom: pessoa para pessoa, nunca marca transmitindo para massa\\n- Emojis: máximo 3, estratégicos — nunca decorativos\\n- Quick replies: 2-3 opções de resposta que gerem continuidade de conversa\\n\\nETAPA 3 — REVISÃO DE CONSISTÊNCIA\\nAntes de retornar, verifique se todos os canais:\\n- Mantêm o tom_de_voz definido no briefing\\n- Comunicam a mesma estratégia com personalidade própria por canal\\n- NÃO repetem o mesmo texto entre si\\n- Respeitam todas as \"restricoes\" listadas no briefing\\n\\nETAPA 4 — VALIDAÇÃO TÉCNICA\\nConte os caracteres do assunto e do pré-header do e-mail.\\nSe algum limite foi ultrapassado, reescreva antes de retornar.\\nRegistre a contagem real em \"contagem_chars\".\\n\\n---\\n\\nRETORNE SOMENTE este JSON válido, sem texto adicional, sem markdown, sem blocos de código:\\n\\n{\\n  \"instagram\": {\\n    \"legenda\": \"texto completo — gancho + desenvolvimento + CTA\",\\n    \"hashtags\": [\"#hashtag1\", \"#hashtag2\", \"#hashtag3\"],\\n    \"cta\": \"texto específico do CTA destacado\",\\n    \"chars_legenda\": 0\\n  },\\n  \"email\": {\\n    \"assunto\": \"linha de assunto (máx 50 chars)\",\\n    \"pre_header\": \"pré-header complementar (máx 100 chars)\",\\n    \"body\": \"corpo completo do e-mail com quebras de linha \\\\n\",\\n    \"cta_texto\": \"texto do botão CTA\",\\n    \"cta_link_placeholder\": \"[LINK_CAMPANHA]\",\\n    \"contagem_chars\": {\\n      \"assunto\": 0,\\n      \"pre_header\": 0\\n    }\\n  },\\n  \"whatsapp\": {\\n    \"mensagem\": \"mensagem curta e direta (máx 300 chars)\",\\n    \"quick_replies\": [\"opção 1\", \"opção 2\", \"opção 3\"],\\n    \"chars_mensagem\": 0\\n  }\\n}'}, {role: 'user', content: JSON.stringify($json)}]}) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cred-openai-2",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "id": "node-05",
+      "name": "Function — Extrai Copies",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300],
+      "parameters": {
+        "jsCode": "const prev = $('Function — Extrai Briefing').first().json;\nconst response = JSON.parse($input.first().json.choices[0].message.content);\nreturn [{ json: { ...prev, copies: response } }];"
+      }
+    },
+    {
+      "id": "node-06",
+      "name": "Agente 3A — Designer Visual Flash",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1100, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({generationConfig: {temperature: 0.6, response_mime_type: 'application/json'}, contents: [{role: 'user', parts: [{text: 'Você é um Diretor de Arte especializado em comunicação digital.\\n\\nVocê receberá o briefing estratégico completo (Agente 1) mais as copies finais por canal (Agente 2).\\nSua função é gerar especificações visuais acionáveis para execução por designer humano ou ferramenta gráfica.\\n\\nATENÇÃO CRÍTICA: Você NÃO gera imagens.\\nVocê gera PRESCRIÇÕES EM TEXTO que descrevem como as peças devem ser criadas.\\nNunca descreva uma imagem existente — prescreva diretrizes para criar uma nova.\\n\\n---\\n\\nEXECUTE INTERNAMENTE (não inclua no output):\\n\\nETAPA 1 — LEITURA DE CONTEXTO\\nAbsorva: segmento, público-alvo, tom de voz, benefício principal e personalidade da marca.\\nAs cores e tipografia devem REFLETIR o tom_de_voz:\\n- formal → neutros, serifados, muito espaço\\n- informal → vibrantes, sans-serif, dinâmico\\n- técnico → azuis, cinzas, monoespaçado como detalhe\\n- emocional → quentes, orgânicos, cursivos como detalhe\\n- humorístico → contrastantes, inesperados, geométricos\\n\\nETAPA 2 — ESPECIFICAÇÃO INSTAGRAM\\nDefina paleta de 3 cores HEX com função clara, tipografia Google Fonts,\\nhierarquia visual (o que o olho vê primeiro, segundo, terceiro),\\nestilo fotográfico e elementos gráficos de apoio.\\n\\nETAPA 3 — ESPECIFICAÇÃO E-MAIL\\nDefina layout (single-column é o padrão seguro para e-mail),\\nlargura máxima, cores de cada seção (cabeçalho, corpo, rodapé).\\n\\nETAPA 4 — COERÊNCIA\\nVerifique se as especificações visuais são coerentes com o tom_de_voz e\\ncom as copies geradas pelo Agente 2. Ajuste se necessário.\\n\\n---\\n\\nRETORNE SOMENTE este JSON válido, sem texto adicional, sem markdown, sem blocos de código:\\n\\n{\\n  \"visual\": {\\n    \"instagram\": {\\n      \"paleta\": [\\n        { \"hex\": \"#XXXXXX\", \"funcao\": \"primária\", \"uso\": \"fundo e áreas principais\" },\\n        { \"hex\": \"#XXXXXX\", \"funcao\": \"secundária\", \"uso\": \"textos e elementos de apoio\" },\\n        { \"hex\": \"#XXXXXX\", \"funcao\": \"destaque\", \"uso\": \"CTA, títulos e pontos de atenção\" }\\n      ],\\n      \"tipografia\": {\\n        \"titulo\": { \"fonte\": \"nome exato no Google Fonts\", \"peso\": \"700\", \"tamanho_px\": 32 },\\n        \"corpo\": { \"fonte\": \"nome exato no Google Fonts\", \"peso\": \"400\", \"tamanho_px\": 16 }\\n      },\\n      \"hierarquia_visual\": [\\n        \"1º: elemento de maior impacto (ex: headline em destaque)\",\\n        \"2º: elemento de suporte (ex: benefício visual ou imagem)\",\\n        \"3º: marca e CTA\"\\n      ],\\n      \"estilo_fotografico\": \"descrição precisa do tipo de imagem ideal para a peça\",\\n      \"elementos_graficos\": [\"elemento 1\", \"elemento 2\", \"elemento 3\"]\\n    },\\n    \"email\": {\\n      \"layout\": \"single-column\",\\n      \"largura_px\": 600,\\n      \"cabecalho\": {\\n        \"cor_fundo\": \"#XXXXXX\",\\n        \"cor_texto_logo\": \"#XXXXXX\",\\n        \"altura_px\": 80\\n      },\\n      \"secao_principal\": {\\n        \"cor_fundo\": \"#FFFFFF\",\\n        \"cor_texto\": \"#333333\",\\n        \"cor_destaque\": \"#XXXXXX\"\\n      },\\n      \"rodape\": {\\n        \"cor_fundo\": \"#XXXXXX\",\\n        \"cor_texto\": \"#XXXXXX\"\\n      }\\n    }\\n  }\\n}\\n\\nDADOS: ' + JSON.stringify($json)}]}]}) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "cred-gemini-1",
+          "name": "Google AI account"
+        }
+      }
+    },
+    {
+      "id": "node-07",
+      "name": "Function — Extrai Visual",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1300, 300],
+      "parameters": {
+        "jsCode": "const prev = $('Function — Extrai Copies').first().json;\nconst raw = $input.first().json.candidates[0].content.parts[0].text;\nconst response = JSON.parse(raw);\nreturn [{ json: { ...prev, visual: response.visual } }];"
+      }
+    },
+    {
+      "id": "node-08",
+      "name": "Agente 3B — Acessibilidade Nano",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1500, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({generationConfig: {temperature: 0.1, response_mime_type: 'application/json'}, contents: [{role: 'user', parts: [{text: 'Você é um especialista em acessibilidade digital (WCAG 2.1 nível AA).\\n\\nVocê receberá especificações visuais geradas por outro agente.\\nSua função é SOMENTE adicionar o campo \"acessibilidade\" ao JSON recebido, com notas de revisão.\\nNão altere nenhuma outra chave — apenas acrescente.\\n\\n---\\n\\nEXECUTE INTERNAMENTE (não inclua no output):\\n\\nETAPA 1 — VERIFICAÇÃO DE CONTRASTE\\nPara cada combinação cor de texto + cor de fundo nas especificações:\\n- Calcule ou estime a razão de contraste\\n- Mínimo WCAG AA: 4.5:1 para texto normal, 3:1 para texto grande (≥18px regular ou ≥14px bold)\\n- Se abaixo do mínimo: sinalize em \"alertas\" com sugestão de ajuste de luminosidade\\n\\nETAPA 2 — VERIFICAÇÃO TIPOGRÁFICA\\n- Tamanho mínimo de corpo de texto para digital: 14px\\n- Se fonte_corpo < 14px: sinalize\\n\\nETAPA 3 — ALT TEXT\\nGere alt text funcional e descritivo para imagem principal de cada canal.\\nAlt text funcional descreve a FUNÇÃO da imagem, não apenas o que ela mostra.\\nExemplo ruim: \"pessoa segurando produto\"\\nExemplo bom: \"cliente satisfeito com resultado do serviço X, transmitindo confiança\"\\n\\nETAPA 4 — ORDEM DE LEITURA\\nListe os elementos na ordem que um leitor de tela deve percorrê-los.\\n\\n---\\n\\nRETORNE o JSON completo recebido acrescido do campo \"acessibilidade\".\\nSOMENTE JSON válido, sem texto adicional, sem markdown, sem blocos de código:\\n\\n{\\n  \"visual\": { },\\n  \"acessibilidade\": {\\n    \"contraste_instagram\": {\\n      \"razao_estimada\": \"X:1\",\\n      \"aprovado_wcag_aa\": true,\\n      \"notas\": \"observação se houver\"\\n    },\\n    \"contraste_email\": {\\n      \"razao_estimada\": \"X:1\",\\n      \"aprovado_wcag_aa\": true,\\n      \"notas\": \"observação se houver\"\\n    },\\n    \"fonte_minima_valida\": true,\\n    \"alt_text\": {\\n      \"instagram\": \"texto alternativo funcional para imagem do Instagram\",\\n      \"email\": \"texto alternativo funcional para imagem principal do e-mail\"\\n    },\\n    \"ordem_leitura_instagram\": [\"elemento 1\", \"elemento 2\", \"elemento 3\"],\\n    \"alertas\": []\\n  }\\n}\\n\\nDADOS: ' + JSON.stringify($json.visual)}]}]}) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "cred-gemini-2",
+          "name": "Google AI account"
+        }
+      }
+    },
+    {
+      "id": "node-09",
+      "name": "Function — Extrai Acessibilidade",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1700, 300],
+      "parameters": {
+        "jsCode": "const prev = $('Function — Extrai Visual').first().json;\nconst raw = $input.first().json.candidates[0].content.parts[0].text;\nconst response = JSON.parse(raw);\nreturn [{ json: { ...prev, acessibilidade: response.acessibilidade } }];"
+      }
+    },
+    {
+      "id": "node-10",
+      "name": "Agente 4 — Validador",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1900, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({model: 'gpt-4o', temperature: 0.1, response_format: {type: 'json_object'}, messages: [{role: 'system', content: 'Você é um Inspetor de Qualidade de campanhas de marketing digital.\\n\\nVocê receberá o pacote completo de uma campanha: briefing estratégico, copies por canal,\\nespecificações visuais e notas de acessibilidade.\\nSua função é fazer uma auditoria rigorosa de consistência e qualidade antes da entrega final.\\nNada é entregue sem passar por você.\\n\\n---\\n\\nEXECUTE INTERNAMENTE (não inclua no output):\\n\\nETAPA 1 — LEITURA COMPLETA DO PACOTE\\nAbsorva todos os campos: briefing.contexto, briefing.publico_alvo, briefing.oferta,\\nbriefing.tom_de_voz, briefing.restricoes, copies (todos os canais), visual e acessibilidade.\\n\\nETAPA 2 — AUDITORIA POR CANAL\\nPara cada canal em copies, avalie os 5 critérios abaixo (0 a 100):\\n\\nCRITÉRIOS DE PONTUAÇÃO (total: 100 por canal):\\n1. Alinhamento estratégico (25pts)\\n   O conteúdo reflete o objetivo declarado e o benefício principal da oferta?\\n\\n2. Adequação ao público (20pts)\\n   A linguagem, referências e nível de complexidade atendem ao perfil do público-alvo?\\n   O nível de consciência do público foi respeitado?\\n\\n3. Tom de voz (20pts)\\n   O tom_de_voz está consistente dentro do canal e entre os canais?\\n   As restrições de linguagem foram respeitadas?\\n\\n4. Chamada para ação (20pts)\\n   O CTA é claro, específico, único por canal e orientado à ação?\\n   Para e-mail: o assunto não contém palavras de spam?\\n\\n5. Limites técnicos do canal (15pts)\\n   Instagram: legenda dentro dos limites, gancho presente, hashtags ao final?\\n   E-mail: assunto ≤ 50 chars, pré-header ≤ 100 chars, sem repetição entre eles?\\n   WhatsApp: mensagem ≤ 300 chars, máximo 3 emojis?\\n\\nETAPA 3 — MAPEAMENTO DE DIVERGÊNCIAS\\nPara cada ponto com perda de pontos:\\n- Identifique o canal e o critério\\n- Descreva o problema de forma objetiva e mensurável\\n- Forneça uma correção concreta e acionável\\n\\nDivergências devem ser CIRÚRGICAS:\\n✓ CORRETO: \"assunto do e-mail tem 67 chars — máximo permitido é 50. Sugestão: Seu resultado em 7 dias\"\\n✗ ERRADO: \"o e-mail poderia ser melhorado\"\\n\\nETAPA 4 — VEREDITO\\nScore ≥ 80 em TODOS os canais presentes → \"aprovado\": true\\nQualquer canal com score < 80 → \"aprovado\": false\\n\\n---\\n\\nRETORNE SOMENTE este JSON válido, sem texto adicional, sem markdown, sem blocos de código:\\n\\n{\\n  \"scores\": {\\n    \"instagram\": 0,\\n    \"email\": 0,\\n    \"whatsapp\": 0\\n  },\\n  \"detalhamento_scores\": {\\n    \"instagram\": {\\n      \"alinhamento_estrategico\": 0,\\n      \"adequacao_publico\": 0,\\n      \"tom_de_voz\": 0,\\n      \"chamada_para_acao\": 0,\\n      \"limites_tecnicos\": 0\\n    },\\n    \"email\": {\\n      \"alinhamento_estrategico\": 0,\\n      \"adequacao_publico\": 0,\\n      \"tom_de_voz\": 0,\\n      \"chamada_para_acao\": 0,\\n      \"limites_tecnicos\": 0\\n    },\\n    \"whatsapp\": {\\n      \"alinhamento_estrategico\": 0,\\n      \"adequacao_publico\": 0,\\n      \"tom_de_voz\": 0,\\n      \"chamada_para_acao\": 0,\\n      \"limites_tecnicos\": 0\\n    }\\n  },\\n  \"divergencias\": [\\n    {\\n      \"canal\": \"nome do canal\",\\n      \"criterio\": \"nome do critério perdendo pontos\",\\n      \"problema\": \"descrição objetiva e mensurável\",\\n      \"correcao_sugerida\": \"ação concreta e específica\"\\n    }\\n  ],\\n  \"aprovado\": false,\\n  \"resumo_qualidade\": \"parágrafo conciso com avaliação geral e principais pontos de atenção\"\\n}'}, {role: 'user', content: JSON.stringify($json)}]}) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "cred-openai-3",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "id": "node-11",
+      "name": "Function — Extrai Validação",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2100, 300],
+      "parameters": {
+        "jsCode": "const prev = $('Function — Extrai Acessibilidade').first().json;\nconst response = JSON.parse($input.first().json.choices[0].message.content);\nreturn [{ json: { ...prev, validacao: response } }];"
+      }
+    },
+    {
+      "id": "node-12",
+      "name": "IF — Aprovado",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2300, 300],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-aprovado",
+              "leftValue": "={{ $json.validacao.aprovado }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "node-13",
+      "name": "Webhook Response — Aprovado",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2500, 200],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "node-14",
+      "name": "Set — Relatório de Divergências",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [2500, 400],
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-01",
+              "name": "pipeline_status",
+              "value": "reprovado",
+              "type": "string"
+            },
+            {
+              "id": "assign-02",
+              "name": "scores",
+              "value": "={{ $json.validacao.scores }}",
+              "type": "object"
+            },
+            {
+              "id": "assign-03",
+              "name": "divergencias",
+              "value": "={{ $json.validacao.divergencias }}",
+              "type": "array"
+            },
+            {
+              "id": "assign-04",
+              "name": "resumo",
+              "value": "={{ $json.validacao.resumo_qualidade }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Webhook — GTC Pipeline": {
+      "main": [
+        [
+          {
+            "node": "Agente 1 — Leitor de Briefing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agente 1 — Leitor de Briefing": {
+      "main": [
+        [
+          {
+            "node": "Function — Extrai Briefing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Function — Extrai Briefing": {
+      "main": [
+        [
+          {
+            "node": "Agente 2 — Copy Writer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agente 2 — Copy Writer": {
+      "main": [
+        [
+          {
+            "node": "Function — Extrai Copies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Function — Extrai Copies": {
+      "main": [
+        [
+          {
+            "node": "Agente 3A — Designer Visual Flash",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agente 3A — Designer Visual Flash": {
+      "main": [
+        [
+          {
+            "node": "Function — Extrai Visual",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Function — Extrai Visual": {
+      "main": [
+        [
+          {
+            "node": "Agente 3B — Acessibilidade Nano",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agente 3B — Acessibilidade Nano": {
+      "main": [
+        [
+          {
+            "node": "Function — Extrai Acessibilidade",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Function — Extrai Acessibilidade": {
+      "main": [
+        [
+          {
+            "node": "Agente 4 — Validador",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agente 4 — Validador": {
+      "main": [
+        [
+          {
+            "node": "Function — Extrai Validação",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Function — Extrai Validação": {
+      "main": [
+        [
+          {
+            "node": "IF — Aprovado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF — Aprovado": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response — Aprovado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set — Relatório de Divergências",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1.0.0",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}
