@@ -1,0 +1,793 @@
+{
+  "name": "Pipeline Campanha Multicanal – Marketing IA v2",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": { "item": [{ "mode": "everyMinute" }] },
+        "documentId": { "__rl": true, "value": "SEU_SPREADSHEET_ID_BRIEFING", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "gid=0", "mode": "list", "cachedResultName": "Briefing" },
+        "event": "rowAdded",
+        "options": {}
+      },
+      "id": "aaa00001-0000-0000-0000-000000000001",
+      "name": "Google Sheets Trigger",
+      "type": "n8n-nodes-base.googleSheetsTrigger",
+      "typeVersion": 1,
+      "position": [-2800, 300],
+      "credentials": { "googleSheetsTriggerOAuth2Api": { "id": "SEU_CREDENTIAL_TRIGGER_ID", "name": "Google Sheets Trigger OAuth2 API" } }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ JSON.stringify($json) }}",
+        "options": {
+          "systemMessage": "Você é um Analista Estratégico de Briefing especializado em marketing, posicionamento e copywriting.\n\nSua função é transformar respostas brutas de formulários em inteligência estratégica estruturada para outros agentes de IA.\n\nVocê NÃO deve criar copy final.\n\nSua responsabilidade é:\n- interpretar e limpar os dados recebidos\n- estruturar e enriquecer estrategicamente\n- identificar gaps e informações faltantes\n- preparar insumos para agentes de copywriting de 3 canais distintos: Instagram, WhatsApp e Email\n\nVocê receberá dados vindos de formulários, CRMs ou Google Sheets.\n\nREGRAS ABSOLUTAS:\n- Retorne APENAS JSON válido e puro\n- NUNCA use markdown, blocos de código ou texto fora do JSON\n- NUNCA invente informações — use null para campos ausentes\n- Se uma informação estiver vaga, sinalize em informacoes_faltantes\n- Corrija erros gramaticais e normalize os textos\n- Interprete estrategicamente o contexto do negócio\n\nESTRUTURA OBRIGATÓRIA DO OUTPUT:\n{\n  \"contexto\": {\n    \"produto_servico\": \"\",\n    \"objetivo\": \"\",\n    \"momento_negocio\": \"\",\n    \"segmento\": \"\",\n    \"posicionamento\": \"\"\n  },\n  \"publico_alvo\": {\n    \"quem_e\": \"\",\n    \"nivel_consciencia\": \"\",\n    \"principais_dores\": [],\n    \"principais_desejos\": [],\n    \"objecoes\": [],\n    \"transformacao_desejada\": \"\"\n  },\n  \"oferta\": {\n    \"o_que_esta_sendo_vendido\": \"\",\n    \"beneficio_principal\": \"\",\n    \"beneficios_secundarios\": [],\n    \"diferenciais\": [],\n    \"prova\": null\n  },\n  \"tom_de_voz\": {\n    \"linguagem\": [],\n    \"personalidade_marca\": \"\",\n    \"arquetipo\": \"\",\n    \"o_que_evitar\": []\n  },\n  \"leitura_estrategica\": {\n    \"o_que_cliente_quer_dizer\": \"\",\n    \"emocao_central_da_marca\": \"\",\n    \"oportunidades_posicionamento\": [],\n    \"angulos_copy\": [],\n    \"big_ideas\": [],\n    \"mecanismos_unicos\": []\n  },\n  \"informacoes_faltantes\": []\n}\n\nRetorne somente JSON puro e válido."
+        }
+      },
+      "id": "aaa00001-0000-0000-0000-000000000002",
+      "name": "Agente 1 Leitor de Briefing",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [-2450, 300],
+      "notes": "Recebe dados brutos do Google Sheets e retorna JSON estratégico estruturado."
+    },
+    {
+      "parameters": {
+        "model": { "__rl": true, "value": "gpt-4.1-mini", "mode": "list", "cachedResultName": "gpt-4.1-mini" },
+        "options": { "maxTokens": 2500, "temperature": 0.3 }
+      },
+      "id": "aaa00001-0000-0000-0000-000000000003",
+      "name": "LLM Agente 1",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [-2450, 480],
+      "credentials": { "openAiApi": { "id": "SEU_OPENAI_CREDENTIAL_ID", "name": "OpenAI account" } }
+    },
+    {
+      "parameters": { "sessionIdType": "customKey", "sessionKey": "agente1_briefing_session", "contextWindowLength": 10 },
+      "id": "aaa00001-0000-0000-0000-000000000004",
+      "name": "Memoria Agente 1",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [-2350, 480]
+    },
+    {
+      "parameters": {
+        "jsCode": "const output = $input.first().json.output;\n\nlet briefing;\ntry {\n  briefing = JSON.parse(output);\n} catch(e) {\n  const match = output.match(/```json([\\s\\S]*?)```/);\n  if (match) {\n    try { briefing = JSON.parse(match[1].trim()); }\n    catch(e2) { briefing = { raw: output }; }\n  } else {\n    briefing = { raw: output };\n  }\n}\n\nconst briefingStr = JSON.stringify(briefing, null, 2);\n\nreturn [{\n  json: {\n    briefing_analisado: briefing,\n    briefing_str: briefingStr,\n    prompt_copy_ig: `BRIEFING ESTRATÉGICO ANALISADO:\\n${briefingStr}\\n\\nCom base neste briefing, crie o copy completo para INSTAGRAM conforme as instruções do seu sistema.`,\n    prompt_copy_zap: `BRIEFING ESTRATÉGICO ANALISADO:\\n${briefingStr}\\n\\nCom base neste briefing, crie o copy completo para WHATSAPP conforme as instruções do seu sistema.`,\n    prompt_copy_email: `BRIEFING ESTRATÉGICO ANALISADO:\\n${briefingStr}\\n\\nCom base neste briefing, crie o copy completo para EMAIL MARKETING conforme as instruções do seu sistema.`\n  }\n}];"
+      },
+      "id": "aaa00001-0000-0000-0000-000000000005",
+      "name": "Formatar Saida Briefing",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-2100, 300]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.prompt_copy_ig }}",
+        "options": {
+          "systemMessage": "Você é um Copywriter Especialista em Instagram com foco em alta conversão e engajamento orgânico.\n\nSua ÚNICA responsabilidade é criar copy de alta qualidade EXCLUSIVAMENTE para o Instagram.\n\nCOMPORTAMENTO ESPERADO:\nPense como um social media especialista em performance, copywriter de redes sociais e estrategista de conteúdo viral.\n\nREGRAS DO CANAL — INSTAGRAM:\n- Linguagem: humana, emocional, próxima, nunca corporativa\n- Hook: os primeiros 125 caracteres são decisivos — devem parar o scroll\n- Legenda: máximo 2.200 caracteres, estrutura escaneável com quebras de linha\n- Parágrafos curtos (1-3 linhas máximo)\n- Emojis: uso moderado e estratégico\n- Hashtags: 5 a 10, mix de nicho + volume\n- CTA: direto e específico (ex: 'Comenta QUERO', 'Salva esse post')\n- Carrossel: primeiro slide = hook visual, último = CTA forte\n- Priorize conexão emocional antes de informação técnica\n\nNÃO crie copy para WhatsApp ou Email.\n\nFORMATO DE SAÍDA OBRIGATÓRIO — APENAS JSON PURO:\n{\n  \"canal\": \"instagram\",\n  \"hook\": \"Frase de abertura poderosa — primeiros 125 caracteres que param o scroll\",\n  \"legenda_completa\": \"Legenda completa do post com quebras de linha estratégicas\",\n  \"cta\": \"Call to action claro e específico\",\n  \"hashtags\": [\"#hashtag1\", \"#hashtag2\", \"#hashtag3\"],\n  \"frases_de_impacto\": [\"frase curta 1\", \"frase curta 2\", \"frase curta 3\"],\n  \"copy_carrossel\": {\n    \"slide_1_hook\": \"Primeiro slide — hook visual idêntico ao hook acima\",\n    \"slide_2\": \"Ponto de dor ou desejo principal\",\n    \"slide_3\": \"Benefício principal\",\n    \"slide_4\": \"Benefício secundário ou prova social\",\n    \"slide_5\": \"Urgência ou diferencial\",\n    \"slide_final_cta\": \"CTA forte para o último slide\"\n  },\n  \"alternativas_hook\": [\"hook alternativo 1\", \"hook alternativo 2\"]\n}\n\nRETORNE SOMENTE JSON PURO E VÁLIDO. NUNCA use markdown ou blocos de código."
+        }
+      },
+      "id": "aaa00001-0000-0000-0000-000000000006",
+      "name": "Agente 2.0 Copy Instagram",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [-1750, -50],
+      "notes": "Cria copy exclusivamente para Instagram: hook, legenda, hashtags, carrossel."
+    },
+    {
+      "parameters": {
+        "model": { "__rl": true, "value": "gpt-4.1-mini", "mode": "list", "cachedResultName": "gpt-4.1-mini" },
+        "options": { "maxTokens": 3000, "temperature": 0.8 }
+      },
+      "id": "aaa00001-0000-0000-0000-000000000007",
+      "name": "LLM Agente 2.0",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [-1750, 130],
+      "credentials": { "openAiApi": { "id": "SEU_OPENAI_CREDENTIAL_ID", "name": "OpenAI account" } }
+    },
+    {
+      "parameters": { "sessionIdType": "customKey", "sessionKey": "agente2_ig_session", "contextWindowLength": 10 },
+      "id": "aaa00001-0000-0000-0000-000000000008",
+      "name": "Memoria Agente 2.0",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [-1650, 130]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.prompt_copy_zap }}",
+        "options": {
+          "systemMessage": "Você é um Copywriter Especialista em WhatsApp Marketing com foco em conversão direta e comunicação conversacional.\n\nSua ÚNICA responsabilidade é criar copy de alta qualidade EXCLUSIVAMENTE para WhatsApp.\n\nCOMPORTAMENTO ESPERADO:\nPense como um especialista em marketing conversacional, copywriter de mensagens 1:1 e estrategista de sequências de automação.\n\nREGRAS DO CANAL — WHATSAPP:\n- Linguagem: ultra conversacional, íntima, como amigo próximo — nunca corporativa\n- Mensagem principal: MÁXIMO 160 caracteres (como SMS direto)\n- Tom: direto, sem jargão, sem formalidade\n- Emojis: uso estratégico, máximo 2-3 por mensagem\n- Personalização: use 'você' e linguagem de comunicação 1:1\n- CTA: resposta de 1 palavra ou toque em link (ex: 'Responde SIM', 'Clica aqui')\n- Sequência: 4 mensagens progressivas com intervalo entre elas\n- NUNCA parecer spam — sempre parecer comunicação humana\n- Cada mensagem da sequência: MÁXIMO 160 caracteres\n\nNÃO crie copy para Instagram ou Email.\n\nFORMATO DE SAÍDA OBRIGATÓRIO — APENAS JSON PURO:\n{\n  \"canal\": \"whatsapp\",\n  \"mensagem_principal\": \"Mensagem principal com MÁXIMO 160 caracteres\",\n  \"sequencia_mensagens\": [\n    { \"ordem\": 1, \"intervalo_minutos\": 0, \"mensagem\": \"Ativar curiosidade ou dor (máx 160 chars)\", \"objetivo\": \"abertura\" },\n    { \"ordem\": 2, \"intervalo_minutos\": 2, \"mensagem\": \"Apresentar a solução (máx 160 chars)\", \"objetivo\": \"interesse\" },\n    { \"ordem\": 3, \"intervalo_minutos\": 5, \"mensagem\": \"Benefício + prova social (máx 160 chars)\", \"objetivo\": \"desejo\" },\n    { \"ordem\": 4, \"intervalo_minutos\": 10, \"mensagem\": \"CTA direto + urgência (máx 160 chars)\", \"objetivo\": \"acao\" }\n  ],\n  \"cta_botao\": \"Texto do botão (máximo 20 caracteres)\",\n  \"legenda_imagem\": \"Texto curto para acompanhar a imagem (máximo 80 caracteres)\"\n}\n\nRETORNE SOMENTE JSON PURO E VÁLIDO. NUNCA use markdown ou blocos de código."
+        }
+      },
+      "id": "aaa00001-0000-0000-0000-000000000009",
+      "name": "Agente 2.1 Copy WhatsApp",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [-1750, 380],
+      "notes": "Cria copy exclusivamente para WhatsApp: mensagem principal, sequência de 4 mensagens."
+    },
+    {
+      "parameters": {
+        "model": { "__rl": true, "value": "gpt-4.1-mini", "mode": "list", "cachedResultName": "gpt-4.1-mini" },
+        "options": { "maxTokens": 2000, "temperature": 0.7 }
+      },
+      "id": "aaa00001-0000-0000-0000-000000000010",
+      "name": "LLM Agente 2.1",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [-1750, 560],
+      "credentials": { "openAiApi": { "id": "SEU_OPENAI_CREDENTIAL_ID", "name": "OpenAI account" } }
+    },
+    {
+      "parameters": { "sessionIdType": "customKey", "sessionKey": "agente2_zap_session", "contextWindowLength": 10 },
+      "id": "aaa00001-0000-0000-0000-000000000011",
+      "name": "Memoria Agente 2.1",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [-1650, 560]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.prompt_copy_email }}",
+        "options": {
+          "systemMessage": "Você é um Copywriter Especialista em Email Marketing com foco em alta taxa de abertura, cliques e conversão.\n\nSua ÚNICA responsabilidade é criar copy de alta qualidade EXCLUSIVAMENTE para email marketing.\n\nCOMPORTAMENTO ESPERADO:\nPense como um especialista em email marketing, copywriter de alta conversão e estrategista de funis de email.\n\nREGRAS DO CANAL — EMAIL MARKETING:\n- Subject line: MÁXIMO 60 caracteres — deve gerar curiosidade ou benefício direto\n- Preheader: MÁXIMO 90 caracteres — complementa e amplifica o subject\n- Estrutura obrigatória: headline forte → problema → solução → benefícios → prova → CTA\n- Parágrafos: máximo 3 linhas cada — email deve ser escaneável\n- CTA: botão único e destacado, texto de ação com máximo 5 palavras\n- PS: sempre incluir — reforça urgência ou o benefício principal\n- Linguagem: pessoal (de pessoa para pessoa), nunca email corporativo genérico\n- NUNCA: excesso de texto em bloco, múltiplos CTAs, subject vago ou clickbait\n\nNÃO crie copy para Instagram ou WhatsApp.\n\nFORMATO DE SAÍDA OBRIGATÓRIO — APENAS JSON PURO:\n{\n  \"canal\": \"email\",\n  \"subject_line\": \"Assunto do email — MÁXIMO 60 caracteres\",\n  \"preheader\": \"Texto de preview — MÁXIMO 90 caracteres\",\n  \"headline\": \"Título principal do email — impactante e claro\",\n  \"corpo\": {\n    \"abertura\": \"Primeiro parágrafo: hook emocional que conecta com o leitor (2-3 linhas)\",\n    \"problema\": \"Identificação da dor do leitor — ele deve se sentir compreendido (2-3 linhas)\",\n    \"solucao\": \"Apresentação da solução ou oferta de forma clara (2-3 linhas)\",\n    \"beneficios\": [\"Benefício 1 em uma linha clara\", \"Benefício 2\", \"Benefício 3\"],\n    \"prova_social\": \"Depoimento, número ou dado de prova que valida a oferta (1-2 linhas)\",\n    \"urgencia\": \"Elemento de urgência ou escassez que incentiva ação agora (1 linha)\"\n  },\n  \"cta_botao\": \"Texto do botão CTA — máximo 5 palavras\",\n  \"ps\": \"P.S. reforçando o benefício principal ou urgência de forma pessoal\"\n}\n\nRETORNE SOMENTE JSON PURO E VÁLIDO. NUNCA use markdown ou blocos de código."
+        }
+      },
+      "id": "aaa00001-0000-0000-0000-000000000012",
+      "name": "Agente 2.2 Copy Email",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [-1750, 810],
+      "notes": "Cria copy exclusivamente para Email: subject, preheader, headline, corpo estruturado, CTA, PS."
+    },
+    {
+      "parameters": {
+        "model": { "__rl": true, "value": "gpt-4.1-mini", "mode": "list", "cachedResultName": "gpt-4.1-mini" },
+        "options": { "maxTokens": 2500, "temperature": 0.7 }
+      },
+      "id": "aaa00001-0000-0000-0000-000000000013",
+      "name": "LLM Agente 2.2",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [-1750, 990],
+      "credentials": { "openAiApi": { "id": "SEU_OPENAI_CREDENTIAL_ID", "name": "OpenAI account" } }
+    },
+    {
+      "parameters": { "sessionIdType": "customKey", "sessionKey": "agente2_email_session", "contextWindowLength": 10 },
+      "id": "aaa00001-0000-0000-0000-000000000014",
+      "name": "Memoria Agente 2.2",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [-1650, 990]
+    },
+    {
+      "parameters": {
+        "jsCode": "const output = $input.first().json.output;\nconst briefingStr = $('Formatar Saida Briefing').first().json.briefing_str;\n\nlet copy;\ntry {\n  copy = JSON.parse(output);\n} catch(e) {\n  const match = output.match(/```json([\\s\\S]*?)```/);\n  if (match) {\n    try { copy = JSON.parse(match[1].trim()); }\n    catch(e2) { copy = { raw: output }; }\n  } else {\n    copy = { raw: output };\n  }\n}\n\nconst copyStr = JSON.stringify(copy, null, 2);\nconst hook = copy.hook || (copy.instagram && copy.instagram.hook) || 'Ver copy acima';\n\nreturn [{\n  json: {\n    briefing_str: briefingStr,\n    copy_instagram: copy,\n    copy_instagram_str: copyStr,\n    hook_instagram: hook,\n    prompt_arte_ig: `BRIEFING ESTRATÉGICO:\\n${briefingStr}\\n\\nCOPY DO INSTAGRAM:\\n${copyStr}\\n\\nHOOK PRINCIPAL: \"${hook}\"\\n\\nConsulte o RAG de Identidade Visual e crie a direção criativa e o prompt de imagem para INSTAGRAM (formato 4:5, 1080x1350px). O hook acima DEVE estar integrado visualmente no prompt.`\n  }\n}];"
+      },
+      "id": "aaa00001-0000-0000-0000-000000000015",
+      "name": "Formatar Para Arte IG",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-1350, -50]
+    },
+    {
+      "parameters": {
+        "jsCode": "const output = $input.first().json.output;\nconst briefingStr = $('Formatar Saida Briefing').first().json.briefing_str;\n\nlet copy;\ntry {\n  copy = JSON.parse(output);\n} catch(e) {\n  const match = output.match(/```json([\\s\\S]*?)```/);\n  if (match) {\n    try { copy = JSON.parse(match[1].trim()); }\n    catch(e2) { copy = { raw: output }; }\n  } else {\n    copy = { raw: output };\n  }\n}\n\nconst copyStr = JSON.stringify(copy, null, 2);\nconst msgPrincipal = copy.mensagem_principal || 'Ver copy acima';\n\nreturn [{\n  json: {\n    briefing_str: briefingStr,\n    copy_whatsapp: copy,\n    copy_whatsapp_str: copyStr,\n    mensagem_principal: msgPrincipal,\n    prompt_arte_zap: `BRIEFING ESTRATÉGICO:\\n${briefingStr}\\n\\nCOPY DO WHATSAPP:\\n${copyStr}\\n\\nMENSAGEM PRINCIPAL: \"${msgPrincipal}\"\\n\\nConsulte o RAG de Identidade Visual e crie a direção criativa e o prompt de imagem para WHATSAPP (formato 1:1, 1080x1080px). A mensagem principal deve ser legível em tela mobile pequena.`\n  }\n}];"
+      },
+      "id": "aaa00001-0000-0000-0000-000000000016",
+      "name": "Formatar Para Arte WhatsApp",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-1350, 380]
+    },
+    {
+      "parameters": {
+        "jsCode": "const output = $input.first().json.output;\nconst briefingStr = $('Formatar Saida Briefing').first().json.briefing_str;\n\nlet copy;\ntry {\n  copy = JSON.parse(output);\n} catch(e) {\n  const match = output.match(/```json([\\s\\S]*?)```/);\n  if (match) {\n    try { copy = JSON.parse(match[1].trim()); }\n    catch(e2) { copy = { raw: output }; }\n  } else {\n    copy = { raw: output };\n  }\n}\n\nconst copyStr = JSON.stringify(copy, null, 2);\nconst subject = copy.subject_line || 'Ver copy acima';\nconst headline = copy.headline || 'Ver copy acima';\n\nreturn [{\n  json: {\n    briefing_str: briefingStr,\n    copy_email: copy,\n    copy_email_str: copyStr,\n    subject_line: subject,\n    headline_email: headline,\n    prompt_arte_email: `BRIEFING ESTRATÉGICO:\\n${briefingStr}\\n\\nCOPY DO EMAIL:\\n${copyStr}\\n\\nSUBJECT: \"${subject}\"\\nHEADLINE: \"${headline}\"\\n\\nConsulte o RAG de Identidade Visual e crie a direção criativa e o prompt do banner hero para EMAIL MARKETING (formato 600x300px horizontal 2:1). A headline deve estar integrada no banner.`\n  }\n}];"
+      },
+      "id": "aaa00001-0000-0000-0000-000000000017",
+      "name": "Formatar Para Arte Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-1350, 810]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.prompt_arte_ig }}",
+        "options": {
+          "systemMessage": "Você é um Diretor de Arte Sênior e Especialista em Prompt Engineering para campanhas de alta conversão no Instagram.\n\nSua ÚNICA responsabilidade é criar a direção visual e o prompt de imagem para INSTAGRAM (formato 4:5 — 1080x1350px).\n\nPROCESSO OBRIGATÓRIO:\n1. Consulte SEMPRE o RAG de Identidade Visual (ferramenta disponível) antes de criar qualquer prompt\n2. Leia o hook do copy recebido — ele é o CENTRO VISUAL da peça\n3. Crie uma direção criativa cinematográfica\n4. Gere o prompt em INGLÊS, mínimo 200 palavras, extremamente detalhado\n\nREGRAS DO CANAL — INSTAGRAM (4:5 VERTICAL):\n- Composição: vertical 4:5, mobile-first, leitura de cima para baixo\n- Espaço negativo: área limpa para o hook aparecer sobre a imagem\n- Paleta: baseada no RAG de identidade visual\n- Tipografia: orientar contraste e posicionamento para o hook\n- Nunca: stock photo, CGI fake, plástico, sorriso artificial, anatomia distorcida\n- Referências de estética: Vogue Travel, Aman Resorts, Apple lifestyle, cinema contemporâneo\n\nO PROMPT DEVE CONTER OBRIGATORIAMENTE:\n- O texto exato do hook do copy para aparecer na imagem\n- Instrução de posicionamento do texto (ex: upper left negative space)\n- Instrução de contraste e legibilidade do texto\n- Especificações técnicas: lens, lighting, color temperature, depth of field, grain\n- Estilo cinematográfico de referência\n- Dimensões: 4:5 vertical, 1080x1350px\n\nFORMATO DE SAÍDA OBRIGATÓRIO — APENAS JSON PURO:\n{\n  \"canal\": \"instagram\",\n  \"hook_utilizado\": \"frase exata do hook conforme recebido\",\n  \"direcao_criativa\": {\n    \"conceito_visual\": \"ideia central da imagem e narrativa visual\",\n    \"emocao_principal\": \"emoção que a imagem deve transmitir em 3 segundos\",\n    \"mensagem_em_3_segundos\": \"o que o usuário sente/entende/deseja imediatamente\",\n    \"estilo_visual\": \"estilo de referência: editorial, cinematic, luxury lifestyle, etc\",\n    \"paleta_de_cores\": [\"cor1 (hex ou nome)\", \"cor2\", \"cor3\"],\n    \"tipografia\": \"orientação de tipo, tamanho, peso e posicionamento do hook\",\n    \"atmosfera\": \"descrição da atmosfera e mood\",\n    \"posicionamento_hook\": \"onde e como o hook aparece na composição\"\n  },\n  \"prompt_imagem\": \"Prompt completo EM INGLÊS para geração de imagem IA. MÍNIMO 200 palavras. Incluir: subject description, cinematic composition, lighting setup, color palette with brand colors, camera/lens specification, depth of field, color temperature, mood/atmosphere, human elements and behavior, negative space for text placement, exact hook text to overlay, typography positioning instructions, contrast requirements for readability, mobile-first vertical composition 4:5, style references. Avoid: stock photo look, fake smiles, generic AI aesthetic, distorted anatomy, oversaturation.\",\n  \"especificacoes_tecnicas\": {\n    \"formato\": \"4:5 vertical\",\n    \"resolucao\": \"1080x1350px\",\n    \"uso\": \"Instagram feed post\"\n  }\n}\n\nSE O HOOK NÃO ESTIVER NO PROMPT: refaça automaticamente.\nRETORNE SOMENTE JSON PURO E VÁLIDO. NUNCA use markdown."
+        }
+      },
+      "id": "aaa00001-0000-0000-0000-000000000018",
+      "name": "Agente 3.0 Arte Instagram",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [-950, -50],
+      "notes": "Diretor de Arte para Instagram: consulta RAG ID Visual e gera prompt cinematográfico 4:5."
+    },
+    {
+      "parameters": {
+        "model": { "__rl": true, "value": "gpt-4.1-mini", "mode": "list", "cachedResultName": "gpt-4.1-mini" },
+        "options": { "maxTokens": 3000, "temperature": 0.8 }
+      },
+      "id": "aaa00001-0000-0000-0000-000000000019",
+      "name": "LLM Agente 3.0",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [-950, 130],
+      "credentials": { "openAiApi": { "id": "SEU_OPENAI_CREDENTIAL_ID", "name": "OpenAI account" } }
+    },
+    {
+      "parameters": { "sessionIdType": "customKey", "sessionKey": "agente3_ig_session", "contextWindowLength": 10 },
+      "id": "aaa00001-0000-0000-0000-000000000020",
+      "name": "Memoria Agente 3.0",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [-850, 130]
+    },
+    {
+      "parameters": {
+        "documentId": { "__rl": true, "value": "SEU_ID_VISUAL_SPREADSHEET_ID", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "gid=0", "mode": "list", "cachedResultName": "ID. VISUAL" },
+        "options": { "dataLocationOnSheet": { "values": { "rangeDefinition": "detectAutomatically" } } }
+      },
+      "id": "aaa00001-0000-0000-0000-000000000021",
+      "name": "RAG ID Visual IG",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [-750, 130],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "SEU_GOOGLE_SHEETS_CREDENTIAL_ID", "name": "Google Sheets OAuth2 API" } }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.prompt_arte_zap }}",
+        "options": {
+          "systemMessage": "Você é um Diretor de Arte Sênior e Especialista em Prompt Engineering para campanhas visuais no WhatsApp Business.\n\nSua ÚNICA responsabilidade é criar a direção visual e o prompt de imagem para WHATSAPP (formato 1:1 — 1080x1080px).\n\nPROCESSO OBRIGATÓRIO:\n1. Consulte SEMPRE o RAG de Identidade Visual (ferramenta disponível) antes de criar qualquer prompt\n2. Leia a mensagem principal do copy recebido — ela é o TEXTO CENTRAL da imagem\n3. Crie uma direção visual simples, direta e legível em tela mobile\n4. Gere o prompt em INGLÊS, detalhado\n\nREGRAS DO CANAL — WHATSAPP (1:1 QUADRADO):\n- Composição: quadrada 1:1, otimizada para tela de smartphone 5-6 polegadas\n- Texto: GRANDE, BOLD, ultra legível — máximo 3 linhas na imagem\n- Fundo: limpo, alto contraste, sem elementos que distraem do texto\n- Simplicidade é lei: imagem simples converte mais que imagem complexa no WhatsApp\n- Nunca: composição lotada, texto pequeno, muitos elementos visuais\n- Paleta: baseada no RAG de identidade visual\n\nO PROMPT DEVE CONTER OBRIGATORIAMENTE:\n- O texto exato da mensagem principal para aparecer na imagem (grande e bold)\n- Instrução de fundo limpo e alto contraste para o texto\n- Otimização para mobile: square format, bold typography\n- Especificações: square 1:1, 1080x1080px, clean composition\n\nFORMATO DE SAÍDA OBRIGATÓRIO — APENAS JSON PURO:\n{\n  \"canal\": \"whatsapp\",\n  \"mensagem_integrada\": \"texto exato que aparece na imagem — conforme mensagem_principal do copy\",\n  \"direcao_criativa\": {\n    \"conceito_visual\": \"conceito: simples, direto, legível — mobile-first\",\n    \"emocao_principal\": \"emoção principal que a imagem transmite\",\n    \"simplicidade\": \"por que a composição simples funciona melhor aqui\",\n    \"estilo_visual\": \"estilo: clean, bold, direct, high-contrast\",\n    \"paleta_de_cores\": [\"cor1 (baseada no RAG)\", \"cor2\"],\n    \"tipografia\": \"bold, grande (mínimo 60pt equivalente), sans-serif moderna, altamente legível\",\n    \"contraste\": \"alto contraste texto/fundo para legibilidade em tela mobile\"\n  },\n  \"prompt_imagem\": \"Prompt completo EM INGLÊS para geração de imagem. Square format 1:1 (1080x1080px). Mobile-first design. Clean background with high contrast. Bold, oversized typography displaying the exact message text. Brand colors from identity. Simple geometric or photographic composition. Professional quality. The text must be the visual hero of the image. No cluttered elements. Easy to read on a 5-inch smartphone screen.\",\n  \"especificacoes_tecnicas\": {\n    \"formato\": \"1:1 quadrado\",\n    \"resolucao\": \"1080x1080px\",\n    \"uso\": \"WhatsApp Status e mensagem com imagem\"\n  }\n}\n\nRETORNE SOMENTE JSON PURO E VÁLIDO. NUNCA use markdown."
+        }
+      },
+      "id": "aaa00001-0000-0000-0000-000000000022",
+      "name": "Agente 3.1 Arte WhatsApp",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [-950, 380],
+      "notes": "Diretor de Arte para WhatsApp: consulta RAG ID Visual e gera prompt mobile-first 1:1."
+    },
+    {
+      "parameters": {
+        "model": { "__rl": true, "value": "gpt-4.1-mini", "mode": "list", "cachedResultName": "gpt-4.1-mini" },
+        "options": { "maxTokens": 2000, "temperature": 0.7 }
+      },
+      "id": "aaa00001-0000-0000-0000-000000000023",
+      "name": "LLM Agente 3.1",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [-950, 560],
+      "credentials": { "openAiApi": { "id": "SEU_OPENAI_CREDENTIAL_ID", "name": "OpenAI account" } }
+    },
+    {
+      "parameters": { "sessionIdType": "customKey", "sessionKey": "agente3_zap_session", "contextWindowLength": 10 },
+      "id": "aaa00001-0000-0000-0000-000000000024",
+      "name": "Memoria Agente 3.1",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [-850, 560]
+    },
+    {
+      "parameters": {
+        "documentId": { "__rl": true, "value": "SEU_ID_VISUAL_SPREADSHEET_ID", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "gid=0", "mode": "list", "cachedResultName": "ID. VISUAL" },
+        "options": { "dataLocationOnSheet": { "values": { "rangeDefinition": "detectAutomatically" } } }
+      },
+      "id": "aaa00001-0000-0000-0000-000000000025",
+      "name": "RAG ID Visual WhatsApp",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [-750, 560],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "SEU_GOOGLE_SHEETS_CREDENTIAL_ID", "name": "Google Sheets OAuth2 API" } }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.prompt_arte_email }}",
+        "options": {
+          "systemMessage": "Você é um Diretor de Arte Sênior e Especialista em Prompt Engineering para campanhas visuais de Email Marketing.\n\nSua ÚNICA responsabilidade é criar a direção visual e o prompt do banner hero para EMAIL MARKETING (formato horizontal 600x300px — proporção 2:1).\n\nPROCESSO OBRIGATÓRIO:\n1. Consulte SEMPRE o RAG de Identidade Visual (ferramenta disponível) antes de criar qualquer prompt\n2. Leia o subject e a headline do copy recebido — a headline é o ELEMENTO CENTRAL do banner\n3. Crie um banner horizontal profissional que funciona em dark mode e light mode\n4. Gere o prompt em INGLÊS, detalhado\n\nREGRAS DO CANAL — EMAIL MARKETING (BANNER HERO 2:1):\n- Composição: horizontal 2:1 (600x300px), wide format — nunca vertical\n- Largura fixa: 600px (padrão universal de email)\n- Headline: deve aparecer integrada no banner, legível e hierarquicamente dominante\n- Compatibilidade: funciona em dark mode E light mode (fundo nem preto puro nem branco puro)\n- Profissionalismo: estilo editorial corporativo premium — não lifestyle extremo\n- Área para CTA visual: espaço reservado para botão de call to action\n- Nunca: formato vertical, texto ilegível, excesso de elementos, fundo incompatível com dark mode\n\nO PROMPT DEVE CONTER OBRIGATORIAMENTE:\n- A headline exata do email para integrar no banner\n- Formato horizontal 600x300px (2:1 ratio)\n- Compatibilidade dark/light mode\n- Área para botão CTA\n- Estilo profissional de email marketing\n\nFORMATO DE SAÍDA OBRIGATÓRIO — APENAS JSON PURO:\n{\n  \"canal\": \"email\",\n  \"headline_integrada\": \"headline exata do email que aparece no banner\",\n  \"direcao_criativa\": {\n    \"conceito_visual\": \"conceito do banner hero\",\n    \"emocao_principal\": \"emoção que o banner transmite\",\n    \"hierarquia_visual\": \"como headline e elementos se organizam no banner horizontal\",\n    \"estilo_visual\": \"estilo: corporate-clean, editorial-professional, lifestyle-premium\",\n    \"paleta_de_cores\": [\"cor1 (baseada no RAG)\", \"cor2\", \"cor3\"],\n    \"tipografia\": \"especificação de tipo e posicionamento da headline\",\n    \"compatibilidade\": \"como o design funciona em dark mode e light mode\"\n  },\n  \"prompt_imagem\": \"Prompt completo EM INGLÊS para o banner hero de email marketing. Horizontal format 2:1 ratio (600x300px width). Professional email header design. Incorporate the exact headline text prominently. Brand colors. Clean layout with visual hierarchy. Space for CTA button area. Works in both dark and light email clients — use mid-tone backgrounds. Editorial professional style. Wide horizontal composition. No busy patterns. No text that would be invisible in dark mode.\",\n  \"alt_text\": \"Texto alternativo descritivo para quando imagens estão desativadas no email\",\n  \"especificacoes_tecnicas\": {\n    \"formato\": \"2:1 horizontal\",\n    \"resolucao\": \"600x300px\",\n    \"uso\": \"Email marketing banner hero\"\n  }\n}\n\nRETORNE SOMENTE JSON PURO E VÁLIDO. NUNCA use markdown."
+        }
+      },
+      "id": "aaa00001-0000-0000-0000-000000000026",
+      "name": "Agente 3.2 Arte Email",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [-950, 810],
+      "notes": "Diretor de Arte para Email: consulta RAG ID Visual e gera prompt de banner hero 600x300px."
+    },
+    {
+      "parameters": {
+        "model": { "__rl": true, "value": "gpt-4.1-mini", "mode": "list", "cachedResultName": "gpt-4.1-mini" },
+        "options": { "maxTokens": 2000, "temperature": 0.7 }
+      },
+      "id": "aaa00001-0000-0000-0000-000000000027",
+      "name": "LLM Agente 3.2",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [-950, 990],
+      "credentials": { "openAiApi": { "id": "SEU_OPENAI_CREDENTIAL_ID", "name": "OpenAI account" } }
+    },
+    {
+      "parameters": { "sessionIdType": "customKey", "sessionKey": "agente3_email_session", "contextWindowLength": 10 },
+      "id": "aaa00001-0000-0000-0000-000000000028",
+      "name": "Memoria Agente 3.2",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [-850, 990]
+    },
+    {
+      "parameters": {
+        "documentId": { "__rl": true, "value": "SEU_ID_VISUAL_SPREADSHEET_ID", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "gid=0", "mode": "list", "cachedResultName": "ID. VISUAL" },
+        "options": { "dataLocationOnSheet": { "values": { "rangeDefinition": "detectAutomatically" } } }
+      },
+      "id": "aaa00001-0000-0000-0000-000000000029",
+      "name": "RAG ID Visual Email",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [-750, 990],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "SEU_GOOGLE_SHEETS_CREDENTIAL_ID", "name": "Google Sheets OAuth2 API" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const artOutput = $input.first().json.output;\nconst briefing = $('Formatar Para Arte IG').first().json.briefing_str;\nconst copy = $('Formatar Para Arte IG').first().json.copy_instagram_str;\n\nlet arte;\ntry {\n  arte = JSON.parse(artOutput);\n} catch(e) {\n  const match = artOutput.match(/```json([\\s\\S]*?)```/);\n  if (match) {\n    try { arte = JSON.parse(match[1].trim()); }\n    catch(e2) { arte = { raw: artOutput }; }\n  } else {\n    arte = { raw: artOutput };\n  }\n}\n\nconst arteStr = JSON.stringify(arte, null, 2);\n\nreturn [{\n  json: {\n    briefing_str: briefing,\n    copy_str: copy,\n    arte_str: arteStr,\n    prompt_validador: `Você é o Validador de Campanha Instagram. Valide rigorosamente TODOS os elementos abaixo.\\n\\nBRIEFING ESTRATÉGICO:\\n${briefing}\\n\\nCOPY DO INSTAGRAM:\\n${copy}\\n\\nDIREÇÃO VISUAL E PROMPT DE IMAGEM:\\n${arteStr}\\n\\nValide criticamente e retorne o JSON de avaliação conforme seu sistema.`\n  }\n}];"
+      },
+      "id": "aaa00001-0000-0000-0000-000000000030",
+      "name": "Formatar Para Validador IG",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-550, -50]
+    },
+    {
+      "parameters": {
+        "jsCode": "const artOutput = $input.first().json.output;\nconst briefing = $('Formatar Para Arte WhatsApp').first().json.briefing_str;\nconst copy = $('Formatar Para Arte WhatsApp').first().json.copy_whatsapp_str;\n\nlet arte;\ntry {\n  arte = JSON.parse(artOutput);\n} catch(e) {\n  const match = artOutput.match(/```json([\\s\\S]*?)```/);\n  if (match) {\n    try { arte = JSON.parse(match[1].trim()); }\n    catch(e2) { arte = { raw: artOutput }; }\n  } else {\n    arte = { raw: artOutput };\n  }\n}\n\nconst arteStr = JSON.stringify(arte, null, 2);\n\nreturn [{\n  json: {\n    briefing_str: briefing,\n    copy_str: copy,\n    arte_str: arteStr,\n    prompt_validador: `Você é o Validador de Campanha WhatsApp. Valide rigorosamente TODOS os elementos abaixo.\\n\\nBRIEFING ESTRATÉGICO:\\n${briefing}\\n\\nCOPY DO WHATSAPP:\\n${copy}\\n\\nDIREÇÃO VISUAL E PROMPT DE IMAGEM:\\n${arteStr}\\n\\nValide criticamente e retorne o JSON de avaliação conforme seu sistema.`\n  }\n}];"
+      },
+      "id": "aaa00001-0000-0000-0000-000000000031",
+      "name": "Formatar Para Validador WhatsApp",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-550, 380]
+    },
+    {
+      "parameters": {
+        "jsCode": "const artOutput = $input.first().json.output;\nconst briefing = $('Formatar Para Arte Email').first().json.briefing_str;\nconst copy = $('Formatar Para Arte Email').first().json.copy_email_str;\n\nlet arte;\ntry {\n  arte = JSON.parse(artOutput);\n} catch(e) {\n  const match = artOutput.match(/```json([\\s\\S]*?)```/);\n  if (match) {\n    try { arte = JSON.parse(match[1].trim()); }\n    catch(e2) { arte = { raw: artOutput }; }\n  } else {\n    arte = { raw: artOutput };\n  }\n}\n\nconst arteStr = JSON.stringify(arte, null, 2);\n\nreturn [{\n  json: {\n    briefing_str: briefing,\n    copy_str: copy,\n    arte_str: arteStr,\n    prompt_validador: `Você é o Validador de Campanha Email. Valide rigorosamente TODOS os elementos abaixo.\\n\\nBRIEFING ESTRATÉGICO:\\n${briefing}\\n\\nCOPY DO EMAIL:\\n${copy}\\n\\nDIREÇÃO VISUAL E BANNER HERO:\\n${arteStr}\\n\\nValide criticamente e retorne o JSON de avaliação conforme seu sistema.`\n  }\n}];"
+      },
+      "id": "aaa00001-0000-0000-0000-000000000032",
+      "name": "Formatar Para Validador Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-550, 810]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.prompt_validador }}",
+        "options": {
+          "systemMessage": "Você é um Diretor de Marketing Digital Sênior com 20 anos de experiência em campanhas para Instagram.\n\nSua função é validar rigorosamente a campanha de INSTAGRAM antes da entrega ao cliente. Seja crítico — o cliente pagou por qualidade premium.\n\nCRITÉRIOS DE AVALIAÇÃO — INSTAGRAM (5 critérios, 0-20 cada):\n\n1. FORÇA DO HOOK (0-20):\n- Os primeiros 125 caracteres param o scroll?\n- Gera curiosidade, emoção ou desejo imediato?\n- É específico ou genérico demais?\n\n2. QUALIDADE DA LEGENDA (0-20):\n- Estrutura escaneável com quebras de linha?\n- Conexão emocional com o público?\n- CTA claro e direto?\n- Linguagem humana ou corporativa?\n\n3. ALINHAMENTO COM BRIEFING (0-20):\n- O copy respeita o objetivo definido no briefing?\n- Público-alvo, dores e desejos foram atendidos?\n- Tom de voz está correto?\n\n4. DIREÇÃO VISUAL (0-20):\n- O prompt de imagem é cinematográfico e detalhado?\n- O hook está integrado visualmente?\n- Respeita a identidade visual da marca?\n- Formato 4:5 e mobile-first?\n\n5. POTENCIAL DE ENGAJAMENTO (0-20):\n- Hashtags estratégicas?\n- Carrossel bem estruturado com progressão?\n- Copy convida à ação de engajamento?\n\nSCORE TOTAL: soma dos 5 critérios (0-100)\nAPROVADO: score total >= 80 E nenhum critério com score < 14\n\nFORMATO DE SAÍDA OBRIGATÓRIO — APENAS JSON PURO:\n{\n  \"canal\": \"instagram\",\n  \"scores\": {\n    \"forca_hook\": 0,\n    \"qualidade_legenda\": 0,\n    \"alinhamento_briefing\": 0,\n    \"direcao_visual\": 0,\n    \"potencial_engajamento\": 0,\n    \"total\": 0\n  },\n  \"pontos_fortes\": [\"ponto forte 1\", \"ponto forte 2\", \"ponto forte 3\"],\n  \"pontos_fracos\": [\"ponto fraco 1\", \"ponto fraco 2\"],\n  \"riscos\": [\"risco 1\"],\n  \"veredito\": \"APROVADO\",\n  \"ajustes_recomendados\": \"Descrição detalhada dos ajustes necessários, elemento por elemento\",\n  \"aprovado\": true\n}\n\nREGRA: aprovado = true SOMENTE se total >= 80 E nenhum critério < 14.\nRETORNE SOMENTE JSON PURO E VÁLIDO. NUNCA use markdown."
+        }
+      },
+      "id": "aaa00001-0000-0000-0000-000000000033",
+      "name": "Validador Instagram",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [-150, -50],
+      "notes": "Valida copy + direção visual do Instagram com score de 5 critérios."
+    },
+    {
+      "parameters": {
+        "model": { "__rl": true, "value": "gpt-4.1-mini", "mode": "list", "cachedResultName": "gpt-4.1-mini" },
+        "options": { "maxTokens": 2000, "temperature": 0.2 }
+      },
+      "id": "aaa00001-0000-0000-0000-000000000034",
+      "name": "LLM Validador Instagram",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [-150, 130],
+      "credentials": { "openAiApi": { "id": "SEU_OPENAI_CREDENTIAL_ID", "name": "OpenAI account" } }
+    },
+    {
+      "parameters": { "sessionIdType": "customKey", "sessionKey": "validador_ig_session", "contextWindowLength": 10 },
+      "id": "aaa00001-0000-0000-0000-000000000035",
+      "name": "Memoria Validador Instagram",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [-50, 130]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.prompt_validador }}",
+        "options": {
+          "systemMessage": "Você é um Especialista em Marketing Conversacional e WhatsApp Business com 15 anos de experiência.\n\nSua função é validar rigorosamente a campanha de WHATSAPP antes da entrega ao cliente. Seja crítico — o cliente pagou por qualidade premium.\n\nCRITÉRIOS DE AVALIAÇÃO — WHATSAPP (5 critérios, 0-20 cada):\n\n1. MENSAGEM PRINCIPAL (0-20):\n- Tem MÁXIMO 160 caracteres?\n- É conversacional, como mensagem de pessoa para pessoa?\n- Gera curiosidade ou ativa a dor certa?\n\n2. SEQUÊNCIA ESTRATÉGICA (0-20):\n- Cada mensagem tem no máximo 160 caracteres?\n- A progressão é lógica: abertura → interesse → desejo → ação?\n- Cada mensagem tem propósito claro?\n- Os intervalos de tempo fazem sentido?\n\n3. ALINHAMENTO COM BRIEFING (0-20):\n- O copy respeita o objetivo, público e tom de voz do briefing?\n- As dores e desejos do público foram ativados?\n\n4. NATURALIDADE (0-20):\n- Parece mensagem humana e não spam?\n- Tom conversacional, sem jargão corporativo?\n- CTA é simples e fácil de responder?\n\n5. VISUAL (0-20):\n- Imagem é simples e legível em tela mobile pequena?\n- Texto na imagem está grande e bold?\n- Alto contraste texto/fundo?\n\nSCORE TOTAL: soma dos 5 critérios (0-100)\nAPROVADO: score total >= 80 E nenhum critério com score < 14\n\nFORMATO DE SAÍDA OBRIGATÓRIO — APENAS JSON PURO:\n{\n  \"canal\": \"whatsapp\",\n  \"scores\": {\n    \"mensagem_principal\": 0,\n    \"sequencia_estrategica\": 0,\n    \"alinhamento_briefing\": 0,\n    \"naturalidade\": 0,\n    \"visual\": 0,\n    \"total\": 0\n  },\n  \"pontos_fortes\": [\"ponto forte 1\", \"ponto forte 2\"],\n  \"pontos_fracos\": [\"ponto fraco 1\"],\n  \"riscos\": [\"risco 1\"],\n  \"veredito\": \"APROVADO\",\n  \"ajustes_recomendados\": \"Ajustes detalhados por elemento: mensagem principal, sequência, visual\",\n  \"aprovado\": true\n}\n\nREGRA: aprovado = true SOMENTE se total >= 80 E nenhum critério < 14.\nVerifique CADA mensagem da sequência — máximo 160 caracteres cada.\nRETORNE SOMENTE JSON PURO E VÁLIDO. NUNCA use markdown."
+        }
+      },
+      "id": "aaa00001-0000-0000-0000-000000000036",
+      "name": "Validador WhatsApp",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [-150, 380],
+      "notes": "Valida copy + direção visual do WhatsApp com score de 5 critérios específicos do canal."
+    },
+    {
+      "parameters": {
+        "model": { "__rl": true, "value": "gpt-4.1-mini", "mode": "list", "cachedResultName": "gpt-4.1-mini" },
+        "options": { "maxTokens": 2000, "temperature": 0.2 }
+      },
+      "id": "aaa00001-0000-0000-0000-000000000037",
+      "name": "LLM Validador WhatsApp",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [-150, 560],
+      "credentials": { "openAiApi": { "id": "SEU_OPENAI_CREDENTIAL_ID", "name": "OpenAI account" } }
+    },
+    {
+      "parameters": { "sessionIdType": "customKey", "sessionKey": "validador_zap_session", "contextWindowLength": 10 },
+      "id": "aaa00001-0000-0000-0000-000000000038",
+      "name": "Memoria Validador WhatsApp",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [-50, 560]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.prompt_validador }}",
+        "options": {
+          "systemMessage": "Você é um Especialista em Email Marketing com 20 anos de experiência em deliverability, taxa de abertura e conversão.\n\nSua função é validar rigorosamente a campanha de EMAIL MARKETING antes da entrega ao cliente. Seja crítico — o cliente pagou por qualidade premium.\n\nCRITÉRIOS DE AVALIAÇÃO — EMAIL (5 critérios, 0-20 cada):\n\n1. SUBJECT + PREHEADER (0-20):\n- Subject tem no MÁXIMO 60 caracteres?\n- Gera curiosidade ou apresenta benefício direto?\n- Preheader complementa e amplifica o subject?\n- Evita palavras de spam?\n\n2. ESTRUTURA DO EMAIL (0-20):\n- Hierarquia visual clara: headline → problema → solução → benefícios → prova → CTA?\n- Parágrafos curtos (máximo 3 linhas)?\n- Email é escaneável?\n- PS presente e relevante?\n\n3. ALINHAMENTO COM BRIEFING (0-20):\n- O copy respeita o objetivo, público e tom de voz?\n- As dores, desejos e objeções do público foram trabalhados?\n\n4. POTENCIAL DE CONVERSÃO (0-20):\n- CTA único, claro e com verbo de ação forte?\n- Elemento de urgência ou escassez presente?\n- PS reforça a proposta?\n- Abertura emocional que conecta?\n\n5. VISUAL DO BANNER (0-20):\n- Banner é horizontal 2:1 (600x300px)?\n- Headline está integrada e legível?\n- Compatível com dark mode e light mode?\n- Profissional e alinhado com identidade visual?\n\nSCORE TOTAL: soma dos 5 critérios (0-100)\nAPROVADO: score total >= 80 E nenhum critério com score < 14\n\nFORMATO DE SAÍDA OBRIGATÓRIO — APENAS JSON PURO:\n{\n  \"canal\": \"email\",\n  \"scores\": {\n    \"subject_preheader\": 0,\n    \"estrutura_email\": 0,\n    \"alinhamento_briefing\": 0,\n    \"potencial_conversao\": 0,\n    \"visual_banner\": 0,\n    \"total\": 0\n  },\n  \"pontos_fortes\": [\"ponto forte 1\", \"ponto forte 2\"],\n  \"pontos_fracos\": [\"ponto fraco 1\"],\n  \"riscos\": [\"risco 1\"],\n  \"veredito\": \"APROVADO\",\n  \"ajustes_recomendados\": \"Ajustes detalhados por elemento: subject, corpo do email, banner\",\n  \"aprovado\": true\n}\n\nREGRA: aprovado = true SOMENTE se total >= 80 E nenhum critério < 14.\nVerifique se subject tem no MÁXIMO 60 caracteres.\nRETORNE SOMENTE JSON PURO E VÁLIDO. NUNCA use markdown."
+        }
+      },
+      "id": "aaa00001-0000-0000-0000-000000000039",
+      "name": "Validador Email",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [-150, 810],
+      "notes": "Valida copy + banner hero do Email com score de 5 critérios específicos do canal."
+    },
+    {
+      "parameters": {
+        "model": { "__rl": true, "value": "gpt-4.1-mini", "mode": "list", "cachedResultName": "gpt-4.1-mini" },
+        "options": { "maxTokens": 2000, "temperature": 0.2 }
+      },
+      "id": "aaa00001-0000-0000-0000-000000000040",
+      "name": "LLM Validador Email",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [-150, 990],
+      "credentials": { "openAiApi": { "id": "SEU_OPENAI_CREDENTIAL_ID", "name": "OpenAI account" } }
+    },
+    {
+      "parameters": { "sessionIdType": "customKey", "sessionKey": "validador_email_session", "contextWindowLength": 10 },
+      "id": "aaa00001-0000-0000-0000-000000000041",
+      "name": "Memoria Validador Email",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [-50, 990]
+    },
+    {
+      "parameters": {
+        "jsCode": "const output = $input.first().json.output;\nconst briefing = $('Formatar Para Validador IG').first().json.briefing_str;\nconst copy = $('Formatar Para Validador IG').first().json.copy_str;\nconst arte = $('Formatar Para Validador IG').first().json.arte_str;\n\nlet val;\ntry {\n  val = JSON.parse(output);\n} catch(e) {\n  const match = output.match(/```json([\\s\\S]*?)```/);\n  if (match) {\n    try { val = JSON.parse(match[1].trim()); }\n    catch(e2) { val = { aprovado: false, veredito: 'ERRO_PARSE', raw: output }; }\n  } else {\n    val = { aprovado: false, veredito: 'ERRO_PARSE', raw: output };\n  }\n}\n\nreturn [{\n  json: {\n    canal: 'instagram',\n    data: new Date().toLocaleString('pt-BR'),\n    validacao: val,\n    aprovado: val.aprovado === true,\n    score_total: val.scores?.total || 0,\n    veredito: val.veredito || 'ERRO',\n    pontos_fortes: (val.pontos_fortes || []).join(' | '),\n    pontos_fracos: (val.pontos_fracos || []).join(' | '),\n    ajustes: val.ajustes_recomendados || '',\n    briefing: briefing,\n    copy: copy,\n    arte: arte\n  }\n}];"
+      },
+      "id": "aaa00001-0000-0000-0000-000000000042",
+      "name": "Parsear Validacao Instagram",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [250, -50]
+    },
+    {
+      "parameters": {
+        "jsCode": "const output = $input.first().json.output;\nconst briefing = $('Formatar Para Validador WhatsApp').first().json.briefing_str;\nconst copy = $('Formatar Para Validador WhatsApp').first().json.copy_str;\nconst arte = $('Formatar Para Validador WhatsApp').first().json.arte_str;\n\nlet val;\ntry {\n  val = JSON.parse(output);\n} catch(e) {\n  const match = output.match(/```json([\\s\\S]*?)```/);\n  if (match) {\n    try { val = JSON.parse(match[1].trim()); }\n    catch(e2) { val = { aprovado: false, veredito: 'ERRO_PARSE', raw: output }; }\n  } else {\n    val = { aprovado: false, veredito: 'ERRO_PARSE', raw: output };\n  }\n}\n\nreturn [{\n  json: {\n    canal: 'whatsapp',\n    data: new Date().toLocaleString('pt-BR'),\n    validacao: val,\n    aprovado: val.aprovado === true,\n    score_total: val.scores?.total || 0,\n    veredito: val.veredito || 'ERRO',\n    pontos_fortes: (val.pontos_fortes || []).join(' | '),\n    pontos_fracos: (val.pontos_fracos || []).join(' | '),\n    ajustes: val.ajustes_recomendados || '',\n    briefing: briefing,\n    copy: copy,\n    arte: arte\n  }\n}];"
+      },
+      "id": "aaa00001-0000-0000-0000-000000000043",
+      "name": "Parsear Validacao WhatsApp",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [250, 380]
+    },
+    {
+      "parameters": {
+        "jsCode": "const output = $input.first().json.output;\nconst briefing = $('Formatar Para Validador Email').first().json.briefing_str;\nconst copy = $('Formatar Para Validador Email').first().json.copy_str;\nconst arte = $('Formatar Para Validador Email').first().json.arte_str;\n\nlet val;\ntry {\n  val = JSON.parse(output);\n} catch(e) {\n  const match = output.match(/```json([\\s\\S]*?)```/);\n  if (match) {\n    try { val = JSON.parse(match[1].trim()); }\n    catch(e2) { val = { aprovado: false, veredito: 'ERRO_PARSE', raw: output }; }\n  } else {\n    val = { aprovado: false, veredito: 'ERRO_PARSE', raw: output };\n  }\n}\n\nreturn [{\n  json: {\n    canal: 'email',\n    data: new Date().toLocaleString('pt-BR'),\n    validacao: val,\n    aprovado: val.aprovado === true,\n    score_total: val.scores?.total || 0,\n    veredito: val.veredito || 'ERRO',\n    pontos_fortes: (val.pontos_fortes || []).join(' | '),\n    pontos_fracos: (val.pontos_fracos || []).join(' | '),\n    ajustes: val.ajustes_recomendados || '',\n    briefing: briefing,\n    copy: copy,\n    arte: arte\n  }\n}];"
+      },
+      "id": "aaa00001-0000-0000-0000-000000000044",
+      "name": "Parsear Validacao Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [250, 810]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 1 },
+          "conditions": [{ "id": "cond-ig-001", "leftValue": "={{ $json.aprovado }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equals" } }],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "aaa00001-0000-0000-0000-000000000045",
+      "name": "IF Aprovado Instagram",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [650, -50]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 1 },
+          "conditions": [{ "id": "cond-zap-001", "leftValue": "={{ $json.aprovado }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equals" } }],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "aaa00001-0000-0000-0000-000000000046",
+      "name": "IF Aprovado WhatsApp",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [650, 380]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 1 },
+          "conditions": [{ "id": "cond-email-001", "leftValue": "={{ $json.aprovado }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equals" } }],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "aaa00001-0000-0000-0000-000000000047",
+      "name": "IF Aprovado Email",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [650, 810]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "__rl": true, "value": "SEU_OUTPUT_SPREADSHEET_ID", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "Campanhas Aprovadas", "mode": "name" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Data": "={{ $json.data }}",
+            "Canal": "={{ $json.canal }}",
+            "Veredito": "={{ $json.veredito }}",
+            "Score_Total": "={{ $json.score_total }}",
+            "Pontos_Fortes": "={{ $json.pontos_fortes }}",
+            "Copy": "={{ $json.copy }}",
+            "Direcao_Arte": "={{ $json.arte }}",
+            "Briefing": "={{ $json.briefing }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            { "id": "Data", "displayName": "Data", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Canal", "displayName": "Canal", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Veredito", "displayName": "Veredito", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Score_Total", "displayName": "Score_Total", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Pontos_Fortes", "displayName": "Pontos_Fortes", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Copy", "displayName": "Copy", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Direcao_Arte", "displayName": "Direcao_Arte", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Briefing", "displayName": "Briefing", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false }
+          ]
+        },
+        "options": {}
+      },
+      "id": "aaa00001-0000-0000-0000-000000000048",
+      "name": "Google Sheets Campanhas Aprovadas",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1050, 200],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "SEU_GOOGLE_SHEETS_CREDENTIAL_ID", "name": "Google Sheets OAuth2 API" } }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "__rl": true, "value": "SEU_OUTPUT_SPREADSHEET_ID", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "Ajustes Necessarios", "mode": "name" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Data": "={{ $json.data }}",
+            "Canal": "={{ $json.canal }}",
+            "Veredito": "={{ $json.veredito }}",
+            "Score_Total": "={{ $json.score_total }}",
+            "Pontos_Fracos": "={{ $json.pontos_fracos }}",
+            "Ajustes_Recomendados": "={{ $json.ajustes }}",
+            "Copy": "={{ $json.copy }}",
+            "Direcao_Arte": "={{ $json.arte }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            { "id": "Data", "displayName": "Data", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Canal", "displayName": "Canal", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Veredito", "displayName": "Veredito", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Score_Total", "displayName": "Score_Total", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Pontos_Fracos", "displayName": "Pontos_Fracos", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Ajustes_Recomendados", "displayName": "Ajustes_Recomendados", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Copy", "displayName": "Copy", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Direcao_Arte", "displayName": "Direcao_Arte", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false }
+          ]
+        },
+        "options": {}
+      },
+      "id": "aaa00001-0000-0000-0000-000000000049",
+      "name": "Google Sheets Campanhas Ajuste",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1050, 700],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "SEU_GOOGLE_SHEETS_CREDENTIAL_ID", "name": "Google Sheets OAuth2 API" } }
+    }
+  ],
+  "connections": {
+    "Google Sheets Trigger": {
+      "main": [[{ "node": "Agente 1 Leitor de Briefing", "type": "main", "index": 0 }]]
+    },
+    "LLM Agente 1": {
+      "ai_languageModel": [[{ "node": "Agente 1 Leitor de Briefing", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Memoria Agente 1": {
+      "ai_memory": [[{ "node": "Agente 1 Leitor de Briefing", "type": "ai_memory", "index": 0 }]]
+    },
+    "Agente 1 Leitor de Briefing": {
+      "main": [[{ "node": "Formatar Saida Briefing", "type": "main", "index": 0 }]]
+    },
+    "Formatar Saida Briefing": {
+      "main": [[
+        { "node": "Agente 2.0 Copy Instagram", "type": "main", "index": 0 },
+        { "node": "Agente 2.1 Copy WhatsApp", "type": "main", "index": 0 },
+        { "node": "Agente 2.2 Copy Email", "type": "main", "index": 0 }
+      ]]
+    },
+    "LLM Agente 2.0": {
+      "ai_languageModel": [[{ "node": "Agente 2.0 Copy Instagram", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Memoria Agente 2.0": {
+      "ai_memory": [[{ "node": "Agente 2.0 Copy Instagram", "type": "ai_memory", "index": 0 }]]
+    },
+    "Agente 2.0 Copy Instagram": {
+      "main": [[{ "node": "Formatar Para Arte IG", "type": "main", "index": 0 }]]
+    },
+    "LLM Agente 2.1": {
+      "ai_languageModel": [[{ "node": "Agente 2.1 Copy WhatsApp", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Memoria Agente 2.1": {
+      "ai_memory": [[{ "node": "Agente 2.1 Copy WhatsApp", "type": "ai_memory", "index": 0 }]]
+    },
+    "Agente 2.1 Copy WhatsApp": {
+      "main": [[{ "node": "Formatar Para Arte WhatsApp", "type": "main", "index": 0 }]]
+    },
+    "LLM Agente 2.2": {
+      "ai_languageModel": [[{ "node": "Agente 2.2 Copy Email", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Memoria Agente 2.2": {
+      "ai_memory": [[{ "node": "Agente 2.2 Copy Email", "type": "ai_memory", "index": 0 }]]
+    },
+    "Agente 2.2 Copy Email": {
+      "main": [[{ "node": "Formatar Para Arte Email", "type": "main", "index": 0 }]]
+    },
+    "Formatar Para Arte IG": {
+      "main": [[{ "node": "Agente 3.0 Arte Instagram", "type": "main", "index": 0 }]]
+    },
+    "Formatar Para Arte WhatsApp": {
+      "main": [[{ "node": "Agente 3.1 Arte WhatsApp", "type": "main", "index": 0 }]]
+    },
+    "Formatar Para Arte Email": {
+      "main": [[{ "node": "Agente 3.2 Arte Email", "type": "main", "index": 0 }]]
+    },
+    "LLM Agente 3.0": {
+      "ai_languageModel": [[{ "node": "Agente 3.0 Arte Instagram", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Memoria Agente 3.0": {
+      "ai_memory": [[{ "node": "Agente 3.0 Arte Instagram", "type": "ai_memory", "index": 0 }]]
+    },
+    "RAG ID Visual IG": {
+      "ai_tool": [[{ "node": "Agente 3.0 Arte Instagram", "type": "ai_tool", "index": 0 }]]
+    },
+    "Agente 3.0 Arte Instagram": {
+      "main": [[{ "node": "Formatar Para Validador IG", "type": "main", "index": 0 }]]
+    },
+    "LLM Agente 3.1": {
+      "ai_languageModel": [[{ "node": "Agente 3.1 Arte WhatsApp", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Memoria Agente 3.1": {
+      "ai_memory": [[{ "node": "Agente 3.1 Arte WhatsApp", "type": "ai_memory", "index": 0 }]]
+    },
+    "RAG ID Visual WhatsApp": {
+      "ai_tool": [[{ "node": "Agente 3.1 Arte WhatsApp", "type": "ai_tool", "index": 0 }]]
+    },
+    "Agente 3.1 Arte WhatsApp": {
+      "main": [[{ "node": "Formatar Para Validador WhatsApp", "type": "main", "index": 0 }]]
+    },
+    "LLM Agente 3.2": {
+      "ai_languageModel": [[{ "node": "Agente 3.2 Arte Email", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Memoria Agente 3.2": {
+      "ai_memory": [[{ "node": "Agente 3.2 Arte Email", "type": "ai_memory", "index": 0 }]]
+    },
+    "RAG ID Visual Email": {
+      "ai_tool": [[{ "node": "Agente 3.2 Arte Email", "type": "ai_tool", "index": 0 }]]
+    },
+    "Agente 3.2 Arte Email": {
+      "main": [[{ "node": "Formatar Para Validador Email", "type": "main", "index": 0 }]]
+    },
+    "Formatar Para Validador IG": {
+      "main": [[{ "node": "Validador Instagram", "type": "main", "index": 0 }]]
+    },
+    "Formatar Para Validador WhatsApp": {
+      "main": [[{ "node": "Validador WhatsApp", "type": "main", "index": 0 }]]
+    },
+    "Formatar Para Validador Email": {
+      "main": [[{ "node": "Validador Email", "type": "main", "index": 0 }]]
+    },
+    "LLM Validador Instagram": {
+      "ai_languageModel": [[{ "node": "Validador Instagram", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Memoria Validador Instagram": {
+      "ai_memory": [[{ "node": "Validador Instagram", "type": "ai_memory", "index": 0 }]]
+    },
+    "Validador Instagram": {
+      "main": [[{ "node": "Parsear Validacao Instagram", "type": "main", "index": 0 }]]
+    },
+    "LLM Validador WhatsApp": {
+      "ai_languageModel": [[{ "node": "Validador WhatsApp", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Memoria Validador WhatsApp": {
+      "ai_memory": [[{ "node": "Validador WhatsApp", "type": "ai_memory", "index": 0 }]]
+    },
+    "Validador WhatsApp": {
+      "main": [[{ "node": "Parsear Validacao WhatsApp", "type": "main", "index": 0 }]]
+    },
+    "LLM Validador Email": {
+      "ai_languageModel": [[{ "node": "Validador Email", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Memoria Validador Email": {
+      "ai_memory": [[{ "node": "Validador Email", "type": "ai_memory", "index": 0 }]]
+    },
+    "Validador Email": {
+      "main": [[{ "node": "Parsear Validacao Email", "type": "main", "index": 0 }]]
+    },
+    "Parsear Validacao Instagram": {
+      "main": [[{ "node": "IF Aprovado Instagram", "type": "main", "index": 0 }]]
+    },
+    "Parsear Validacao WhatsApp": {
+      "main": [[{ "node": "IF Aprovado WhatsApp", "type": "main", "index": 0 }]]
+    },
+    "Parsear Validacao Email": {
+      "main": [[{ "node": "IF Aprovado Email", "type": "main", "index": 0 }]]
+    },
+    "IF Aprovado Instagram": {
+      "main": [
+        [{ "node": "Google Sheets Campanhas Aprovadas", "type": "main", "index": 0 }],
+        [{ "node": "Google Sheets Campanhas Ajuste", "type": "main", "index": 0 }]
+      ]
+    },
+    "IF Aprovado WhatsApp": {
+      "main": [
+        [{ "node": "Google Sheets Campanhas Aprovadas", "type": "main", "index": 0 }],
+        [{ "node": "Google Sheets Campanhas Ajuste", "type": "main", "index": 0 }]
+      ]
+    },
+    "IF Aprovado Email": {
+      "main": [
+        [{ "node": "Google Sheets Campanhas Aprovadas", "type": "main", "index": 0 }],
+        [{ "node": "Google Sheets Campanhas Ajuste", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "pinData": {},
+  "versionId": "campanha-multicanal-v2",
+  "meta": { "templateCredsSetupCompleted": true, "instanceId": "escala-inteligente-v2" },
+  "id": "campanha-multicanal-v2",
+  "tags": []
+}
